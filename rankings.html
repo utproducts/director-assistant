@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>USSSA Florida Baseball Rankings</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0d1117;
+      --bg-card: #161b22;
+      --bg-card-hover: #1c2129;
+      --bg-input: #0d1117;
+      --red: #c8102e;
+      --red-dark: #a50d24;
+      --red-glow: rgba(200, 16, 46, 0.15);
+      --blue: #2563eb;
+      --blue-glow: rgba(37, 99, 235, 0.12);
+      --gold: #f59e0b;
+      --silver: #94a3b8;
+      --bronze: #d97706;
+      --text-primary: #e6edf3;
+      --text-secondary: #8b949e;
+      --text-muted: #6e7681;
+      --border: #30363d;
+      --border-light: #21262d;
+      --success: #10b981;
+      --radius: 12px;
+      --radius-sm: 8px;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'DM Sans', -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text-primary);
+      min-height: 100vh;
+    }
+
+    /* ===== HEADER ===== */
+    .site-header {
+      background: linear-gradient(135deg, #0d1117 0%, #161b22 100%);
+      border-bottom: 1px solid var(--border);
+      padding: 0;
+    }
+    .header-top {
+      display: flex; align-items: center; justify-content: space-between;
+      max-width: 1200px; margin: 0 auto; padding: 16px 24px;
+    }
+    .brand {
+      display: flex; align-items: center; gap: 12px;
+    }
+    .brand-icon {
+      width: 40px; height: 40px; background: var(--red); border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px; font-weight: 800; color: #fff;
+    }
+    .brand-text { font-size: 14px; font-weight: 700; color: var(--text-secondary); letter-spacing: 1.5px; text-transform: uppercase; }
+    .header-hero {
+      max-width: 1200px; margin: 0 auto; padding: 20px 24px 28px;
+      display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+    }
+    .header-hero h1 {
+      font-size: 32px; font-weight: 800; letter-spacing: -0.5px;
+      background: linear-gradient(135deg, #fff 0%, #94a3b8 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    .header-hero p { color: var(--text-secondary); font-size: 14px; margin-top: 4px; }
+    .state-select {
+      padding: 10px 16px; background: var(--bg-input); border: 1px solid var(--border);
+      border-radius: var(--radius-sm); color: var(--text-primary); font-family: inherit;
+      font-size: 14px; font-weight: 600; cursor: pointer;
+    }
+    .state-select:focus { outline: none; border-color: var(--red); }
+
+    /* ===== AGE GROUP TABS ===== */
+    .age-tabs-bar {
+      background: var(--bg-card); border-bottom: 1px solid var(--border);
+    }
+    .age-tabs {
+      max-width: 1200px; margin: 0 auto; padding: 0 24px;
+      display: flex; gap: 0; overflow-x: auto;
+    }
+    .age-tab {
+      padding: 14px 20px; font-size: 14px; font-weight: 600; color: var(--text-muted);
+      cursor: pointer; border-bottom: 3px solid transparent; white-space: nowrap;
+      transition: all 0.15s;
+    }
+    .age-tab:hover { color: var(--text-secondary); }
+    .age-tab.active { color: var(--red); border-bottom-color: var(--red); }
+
+    /* ===== MAIN TABS ===== */
+    .main-container { max-width: 1200px; margin: 0 auto; padding: 24px; }
+    .main-tabs { display: flex; gap: 8px; margin-bottom: 24px; flex-wrap: wrap; }
+    .main-tab {
+      padding: 10px 20px; border-radius: var(--radius-sm); font-size: 14px; font-weight: 600;
+      background: var(--bg-card); border: 1px solid var(--border); color: var(--text-secondary);
+      cursor: pointer; transition: all 0.15s;
+    }
+    .main-tab:hover { border-color: var(--text-muted); color: var(--text-primary); }
+    .main-tab.active { background: var(--red); border-color: var(--red); color: #fff; }
+
+    /* ===== CARDS & TABLES ===== */
+    .card {
+      background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .card-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 16px 20px; border-bottom: 1px solid var(--border); flex-wrap: wrap; gap: 12px;
+    }
+    .card-header h2 { font-size: 16px; font-weight: 700; }
+    .sub-tabs { display: flex; gap: 4px; }
+    .sub-tab {
+      padding: 6px 14px; border-radius: 6px; font-size: 13px; font-weight: 600;
+      background: transparent; border: 1px solid var(--border); color: var(--text-secondary);
+      cursor: pointer; transition: all 0.15s;
+    }
+    .sub-tab.active { background: var(--red); border-color: var(--red); color: #fff; }
+    .filter-row {
+      display: flex; align-items: center; gap: 12px; padding: 12px 20px;
+      border-bottom: 1px solid var(--border-light); flex-wrap: wrap;
+    }
+    .filter-row label { font-size: 13px; color: var(--text-secondary); font-weight: 500; }
+    .filter-input {
+      width: 70px; padding: 6px 10px; background: var(--bg-input); border: 1px solid var(--border);
+      border-radius: 6px; color: var(--text-primary); font-family: inherit; font-size: 13px; text-align: center;
+    }
+    .filter-input:focus { outline: none; border-color: var(--red); }
+    .event-filter {
+      padding: 6px 12px; background: var(--bg-input); border: 1px solid var(--border);
+      border-radius: 6px; color: var(--text-primary); font-family: inherit; font-size: 13px; max-width: 260px;
+    }
+
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    thead th {
+      padding: 10px 12px; text-align: left; font-weight: 600; font-size: 11px;
+      text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted);
+      border-bottom: 1px solid var(--border); white-space: nowrap; cursor: default;
+      position: sticky; top: 0; background: var(--bg-card);
+    }
+    thead th.sortable { cursor: pointer; }
+    thead th.sortable:hover { color: var(--text-primary); }
+    thead th.sorted { color: var(--red); }
+    tbody tr { border-bottom: 1px solid var(--border-light); transition: background 0.1s; }
+    tbody tr:hover { background: var(--bg-card-hover); }
+    tbody td { padding: 10px 12px; white-space: nowrap; }
+    .rank-cell { font-weight: 700; text-align: center; width: 40px; }
+    .rank-1 { color: var(--gold); }
+    .rank-2 { color: var(--silver); }
+    .rank-3 { color: var(--bronze); }
+    .player-name { font-weight: 600; color: var(--text-primary); }
+    .team-name { color: var(--text-secondary); font-size: 12px; }
+    .stat-highlight { font-weight: 700; color: var(--text-primary); }
+    .stat-cell { text-align: right; font-variant-numeric: tabular-nums; }
+    .positive { color: var(--success); }
+    .negative { color: var(--red); }
+
+    /* ===== GAMES ===== */
+    .games-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; padding: 20px; }
+    .game-card {
+      background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm);
+      padding: 16px; transition: border-color 0.15s;
+    }
+    .game-card:hover { border-color: var(--text-muted); }
+    .game-meta { font-size: 11px; color: var(--text-muted); margin-bottom: 12px; display: flex; justify-content: space-between; }
+    .game-status { padding: 2px 8px; border-radius: 4px; font-weight: 600; text-transform: uppercase; font-size: 10px; letter-spacing: 0.5px; }
+    .status-final { background: rgba(16,185,129,0.15); color: var(--success); }
+    .status-live { background: rgba(200,16,46,0.15); color: var(--red); animation: pulse 2s infinite; }
+    .status-pending { background: rgba(139,148,158,0.15); color: var(--text-secondary); }
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.6; } }
+    .game-teams { display: flex; flex-direction: column; gap: 8px; }
+    .game-team { display: flex; justify-content: space-between; align-items: center; }
+    .game-team-name { font-weight: 600; font-size: 14px; }
+    .game-team-name.winner { color: var(--text-primary); }
+    .game-team-name.loser { color: var(--text-muted); }
+    .game-score { font-size: 20px; font-weight: 800; min-width: 30px; text-align: right; }
+    .game-score.winner { color: var(--text-primary); }
+    .game-score.loser { color: var(--text-muted); }
+    .game-divider { height: 1px; background: var(--border-light); }
+
+    /* ===== LOADING ===== */
+    .loading { display: flex; align-items: center; justify-content: center; padding: 60px; gap: 12px; color: var(--text-muted); }
+    .spinner {
+      width: 20px; height: 20px; border: 3px solid var(--border); border-top-color: var(--red);
+      border-radius: 50%; animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .empty-state { text-align: center; padding: 60px 20px; color: var(--text-muted); }
+    .empty-state p { font-size: 15px; }
+
+    /* ===== FOOTER ===== */
+    .site-footer {
+      border-top: 1px solid var(--border); padding: 24px;
+      text-align: center; color: var(--text-muted); font-size: 13px; margin-top: 40px;
+    }
+
+    /* ===== RESPONSIVE ===== */
+    @media (max-width: 768px) {
+      .header-hero h1 { font-size: 24px; }
+      .header-hero { flex-direction: column; align-items: flex-start; }
+      .main-container { padding: 16px; }
+      .age-tab { padding: 12px 14px; font-size: 13px; }
+      .games-grid { grid-template-columns: 1fr; }
+      table { font-size: 12px; }
+      thead th, tbody td { padding: 8px 8px; }
+    }
+    @media (max-width: 480px) {
+      .header-top { padding: 12px 16px; }
+      .header-hero { padding: 16px 16px 20px; }
+      .header-hero h1 { font-size: 20px; }
+      .main-tabs { gap: 6px; }
+      .main-tab { padding: 8px 14px; font-size: 13px; }
+    }
+
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+
+  <!-- HEADER -->
+  <header class="site-header">
+    <div class="header-top">
+      <div class="brand">
+        <div class="brand-icon" style="font-size:15px; letter-spacing:1px;">USSSA</div>
+        <div class="brand-text">USSSA Baseball</div>
+      </div>
+      <div style="font-size:12px; color:var(--text-muted);">Event Central Stats</div>
+    </div>
+    <div class="header-hero">
+      <div>
+        <h1 id="pageTitle">USSSA Florida Baseball Rankings</h1>
+        <p id="pageSubtitle">Season stats, leaderboards & team rankings</p>
+      </div>
+      <select class="state-select" id="stateFilter" onchange="onStateChange()">
+        <option value="FL">Florida</option>
+        <option value="GA">Georgia</option>
+        <option value="AL">Alabama</option>
+        <option value="SC">South Carolina</option>
+        <option value="NC">North Carolina</option>
+        <option value="">All States</option>
+      </select>
+    </div>
+  </header>
+
+  <!-- AGE GROUP TABS -->
+  <div class="age-tabs-bar">
+    <div class="age-tabs" id="ageTabs">
+      <div class="age-tab active" data-age="8U" onclick="setAgeGroup(this, '8U')">8U</div>
+      <div class="age-tab" data-age="9U" onclick="setAgeGroup(this, '9U')">9U</div>
+      <div class="age-tab" data-age="10U" onclick="setAgeGroup(this, '10U')">10U</div>
+      <div class="age-tab" data-age="11U" onclick="setAgeGroup(this, '11U')">11U</div>
+      <div class="age-tab" data-age="12U" onclick="setAgeGroup(this, '12U')">12U</div>
+      <div class="age-tab" data-age="13U" onclick="setAgeGroup(this, '13U')">13U</div>
+      <div class="age-tab" data-age="14U" onclick="setAgeGroup(this, '14U')">14U</div>
+    </div>
+  </div>
+
+  <!-- MAIN CONTENT -->
+  <div class="main-container">
+
+    <!-- Main Tabs -->
+    <div class="main-tabs">
+      <div class="main-tab active" onclick="setMainTab(this, 'leaderboards')">Player Leaderboards</div>
+      <div class="main-tab" onclick="setMainTab(this, 'standings')">Team Rankings</div>
+      <div class="main-tab" onclick="setMainTab(this, 'games')">Recent Games</div>
+    </div>
+
+    <!-- LEADERBOARDS PANEL -->
+    <div id="panelLeaderboards">
+      <div class="card">
+        <div class="card-header">
+          <h2 id="leaderboardTitle">Batting Leaders</h2>
+          <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+            <div class="sub-tabs">
+              <div class="sub-tab active" onclick="setStatTab(this, 'batting')">Batting</div>
+              <div class="sub-tab" onclick="setStatTab(this, 'pitching')">Pitching</div>
+            </div>
+          </div>
+        </div>
+        <div class="filter-row">
+          <label>Event:</label>
+          <select class="event-filter" id="eventFilter" onchange="loadLeaderboards()">
+            <option value="">All Events</option>
+          </select>
+          <label id="minLabel">Min AB:</label>
+          <input class="filter-input" type="number" id="minAB" value="5" min="1" onchange="loadLeaderboards()">
+        </div>
+        <div id="battingPanel">
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Player</th>
+                  <th>Team</th>
+                  <th class="stat-cell sortable" data-sort="games">G</th>
+                  <th class="stat-cell sortable" data-sort="ab">AB</th>
+                  <th class="stat-cell sortable" data-sort="h">H</th>
+                  <th class="stat-cell sortable sorted" data-sort="avg">AVG</th>
+                  <th class="stat-cell sortable" data-sort="hr">HR</th>
+                  <th class="stat-cell sortable" data-sort="rbi">RBI</th>
+                  <th class="stat-cell sortable" data-sort="r">R</th>
+                  <th class="stat-cell sortable" data-sort="doubles">2B</th>
+                  <th class="stat-cell sortable" data-sort="triples">3B</th>
+                  <th class="stat-cell sortable" data-sort="bb">BB</th>
+                  <th class="stat-cell sortable" data-sort="so">SO</th>
+                  <th class="stat-cell sortable" data-sort="slg">SLG</th>
+                  <th class="stat-cell sortable" data-sort="obp">OBP</th>
+                </tr>
+              </thead>
+              <tbody id="battingBody"></tbody>
+            </table>
+          </div>
+        </div>
+        <div id="pitchingPanel" class="hidden">
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Player</th>
+                  <th>Team</th>
+                  <th class="stat-cell sortable" data-sort="games">G</th>
+                  <th class="stat-cell sortable" data-sort="ip">IP</th>
+                  <th class="stat-cell sortable sorted" data-sort="era">ERA</th>
+                  <th class="stat-cell sortable" data-sort="so">K</th>
+                  <th class="stat-cell sortable" data-sort="bb">BB</th>
+                  <th class="stat-cell sortable" data-sort="whip">WHIP</th>
+                  <th class="stat-cell sortable" data-sort="h">H</th>
+                  <th class="stat-cell sortable" data-sort="er">ER</th>
+                  <th class="stat-cell sortable" data-sort="kPer7">K/7</th>
+                </tr>
+              </thead>
+              <tbody id="pitchingBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- STANDINGS PANEL -->
+    <div id="panelStandings" class="hidden">
+      <div class="card">
+        <div class="card-header">
+          <h2>Team Rankings</h2>
+          <div>
+            <select class="event-filter" id="standingsEventFilter" onchange="loadStandings()">
+              <option value="">All Events</option>
+            </select>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Team</th>
+                <th class="stat-cell">W</th>
+                <th class="stat-cell">L</th>
+                <th class="stat-cell sorted">Win%</th>
+                <th class="stat-cell">RS</th>
+                <th class="stat-cell">RA</th>
+                <th class="stat-cell">Diff</th>
+              </tr>
+            </thead>
+            <tbody id="standingsBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- GAMES PANEL -->
+    <div id="panelGames" class="hidden">
+      <div class="card">
+        <div class="card-header">
+          <h2>Recent Games</h2>
+          <div>
+            <select class="event-filter" id="gamesEventFilter" onchange="loadGames()">
+              <option value="">All Events</option>
+            </select>
+          </div>
+        </div>
+        <div class="games-grid" id="gamesGrid">
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- FOOTER -->
+  <footer class="site-footer">
+    Powered by <strong>USSSA Baseball</strong> | Event Central &nbsp;&middot;&nbsp; &copy; 2026
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script>
+    // ===== SUPABASE INIT =====
+    const SUPABASE_URL = 'https://fpeogwnjvvwpeihnlbws.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZwZW9nd25qdnZ3cGVpaG5sYndzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA1MDQ2MDMsImV4cCI6MjA4NjA4MDYwM30._dgDoiN5lo4Jlsq2mMDkNXBOOPYR5ZQfJ-liSNFZq6k';
+    const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    // ===== STATE =====
+    let currentAge = '8U';
+    let currentMainTab = 'leaderboards';
+    let currentStatTab = 'batting';
+    let allEvents = [];
+    let battingSortKey = 'avg';
+    let battingSortDir = -1;
+    let pitchingSortKey = 'era';
+    let pitchingSortDir = 1;
+
+    // ===== NAVIGATION =====
+    function setAgeGroup(el, age) {
+      currentAge = age;
+      document.querySelectorAll('.age-tab').forEach(t => t.classList.remove('active'));
+      el.classList.add('active');
+      refreshCurrentTab();
+    }
+
+    function setMainTab(el, tab) {
+      currentMainTab = tab;
+      document.querySelectorAll('.main-tab').forEach(t => t.classList.remove('active'));
+      el.classList.add('active');
+      document.getElementById('panelLeaderboards').classList.toggle('hidden', tab !== 'leaderboards');
+      document.getElementById('panelStandings').classList.toggle('hidden', tab !== 'standings');
+      document.getElementById('panelGames').classList.toggle('hidden', tab !== 'games');
+      refreshCurrentTab();
+    }
+
+    function setStatTab(el, tab) {
+      currentStatTab = tab;
+      document.querySelectorAll('.sub-tab').forEach(t => t.classList.remove('active'));
+      el.classList.add('active');
+      document.getElementById('battingPanel').classList.toggle('hidden', tab !== 'batting');
+      document.getElementById('pitchingPanel').classList.toggle('hidden', tab !== 'pitching');
+      document.getElementById('leaderboardTitle').textContent = tab === 'batting' ? 'Batting Leaders' : 'Pitching Leaders';
+      document.getElementById('minLabel').textContent = tab === 'batting' ? 'Min AB:' : 'Min IP:';
+      document.getElementById('minAB').value = tab === 'batting' ? 5 : 3;
+      loadLeaderboards();
+    }
+
+    function onStateChange() {
+      const state = document.getElementById('stateFilter').value;
+      const title = state ? state + ' Baseball Rankings' : 'Baseball Rankings';
+      const stateNames = { FL: 'Florida', GA: 'Georgia', AL: 'Alabama', SC: 'South Carolina', NC: 'North Carolina' };
+      document.getElementById('pageTitle').textContent = 'USSSA ' + (stateNames[state] || '') + ' Baseball Rankings';
+      refreshCurrentTab();
+    }
+
+    function refreshCurrentTab() {
+      if (currentMainTab === 'leaderboards') loadLeaderboards();
+      else if (currentMainTab === 'standings') loadStandings();
+      else if (currentMainTab === 'games') loadGames();
+    }
+
+    // ===== LOADING HELPERS =====
+    function showLoading(el) {
+      el.innerHTML = '<div class="loading"><div class="spinner"></div> Loading...</div>';
+    }
+    function showEmpty(el, msg) {
+      el.innerHTML = '<div class="empty-state"><p>' + msg + '</p></div>';
+    }
+
+    // ===== LOAD EVENTS FOR FILTERS =====
+    async function loadEvents() {
+      try {
+        const { data } = await sb.from('ec_events').select('id, name, event_name, start_date').order('start_date', { ascending: false });
+        allEvents = data || [];
+        const opts = '<option value="">All Events</option>' + allEvents.map(e =>
+          '<option value="' + (e.event_name || e.name) + '">' + (e.event_name || e.name) + (e.start_date ? ' (' + e.start_date + ')' : '') + '</option>'
+        ).join('');
+        document.getElementById('eventFilter').innerHTML = opts;
+        document.getElementById('standingsEventFilter').innerHTML = opts;
+        document.getElementById('gamesEventFilter').innerHTML = opts;
+      } catch (e) { console.error('Load events error:', e); }
+    }
+
+    // ===== LEADERBOARDS =====
+    async function loadLeaderboards() {
+      const battingBody = document.getElementById('battingBody');
+      const pitchingBody = document.getElementById('pitchingBody');
+      showLoading(battingBody);
+      showLoading(pitchingBody);
+
+      try {
+        const eventName = document.getElementById('eventFilter').value;
+        const minVal = parseInt(document.getElementById('minAB').value) || (currentStatTab === 'batting' ? 5 : 3);
+
+        // Get games filtered by age group and event
+        let gamesQuery = sb.from('ec_games').select('id, age_group, event_name');
+        if (currentAge) gamesQuery = gamesQuery.eq('age_group', currentAge);
+        if (eventName) gamesQuery = gamesQuery.eq('event_name', eventName);
+        const { data: games } = await gamesQuery;
+        const gameIds = (games || []).map(g => g.id);
+
+        if (gameIds.length === 0) {
+          showEmpty(battingBody, 'No games found for this filter.');
+          showEmpty(pitchingBody, 'No games found for this filter.');
+          return;
+        }
+
+        // Get all stats for these games with player and team joins
+        const { data: stats } = await sb
+          .from('ec_game_stats')
+          .select('*, player:ec_players!player_id(player_name, jersey_number), team:ec_teams!team_id(team_name)')
+          .in('game_id', gameIds);
+
+        // Aggregate batting
+        const batters = {};
+        const pitchers = {};
+
+        for (const s of (stats || [])) {
+          const pid = s.player_id;
+          const name = s.player?.player_name || 'Unknown';
+          const team = s.team?.team_name || 'Unknown';
+
+          if (s.stat_type === 'batting') {
+            if (!batters[pid]) batters[pid] = { name, team, ab:0, r:0, h:0, rbi:0, bb:0, so:0, hr:0, doubles:0, triples:0, games:0 };
+            batters[pid].ab += s.ab || 0;
+            batters[pid].r += s.r || 0;
+            batters[pid].h += s.h || 0;
+            batters[pid].rbi += s.rbi || 0;
+            batters[pid].bb += s.bb || 0;
+            batters[pid].so += s.so || 0;
+            batters[pid].hr += s.hr || 0;
+            batters[pid].doubles += s.doubles || 0;
+            batters[pid].triples += s.triples || 0;
+            batters[pid].games++;
+          }
+
+          if (s.stat_type === 'pitching') {
+            if (!pitchers[pid]) pitchers[pid] = { name, team, ip:0, h:0, r:0, er:0, bb:0, so:0, games:0 };
+            pitchers[pid].ip += s.ip || 0;
+            pitchers[pid].h += s.p_h || 0;
+            pitchers[pid].r += s.p_r || 0;
+            pitchers[pid].er += s.p_er || 0;
+            pitchers[pid].bb += s.p_bb || 0;
+            pitchers[pid].so += s.p_so || 0;
+            pitchers[pid].games++;
+          }
+        }
+
+        // Calculate batting leaders
+        let battingLeaders = Object.values(batters)
+          .filter(b => b.ab >= (currentStatTab === 'batting' ? minVal : 5))
+          .map(b => ({
+            ...b,
+            avg: b.ab > 0 ? b.h / b.ab : 0,
+            slg: b.ab > 0 ? (b.h + b.doubles + 2 * b.triples + 3 * b.hr) / b.ab : 0,
+            obp: (b.ab + b.bb) > 0 ? (b.h + b.bb) / (b.ab + b.bb) : 0,
+          }));
+
+        // Sort batting
+        battingLeaders.sort((a, b) => {
+          const av = a[battingSortKey] ?? 0, bv = b[battingSortKey] ?? 0;
+          return (bv - av) * battingSortDir;
+        });
+        battingLeaders = battingLeaders.slice(0, 50);
+
+        battingBody.innerHTML = battingLeaders.length === 0
+          ? '<tr><td colspan="16" class="empty-state">No qualifying batters found.</td></tr>'
+          : battingLeaders.map((b, i) => {
+            const rank = i + 1;
+            const rc = rank <= 3 ? ' rank-' + rank : '';
+            return '<tr>' +
+              '<td class="rank-cell' + rc + '">' + rank + '</td>' +
+              '<td class="player-name">' + esc(b.name) + '</td>' +
+              '<td class="team-name">' + esc(b.team) + '</td>' +
+              '<td class="stat-cell">' + b.games + '</td>' +
+              '<td class="stat-cell">' + b.ab + '</td>' +
+              '<td class="stat-cell">' + b.h + '</td>' +
+              '<td class="stat-cell stat-highlight">' + fmtAvg(b.avg) + '</td>' +
+              '<td class="stat-cell">' + b.hr + '</td>' +
+              '<td class="stat-cell">' + b.rbi + '</td>' +
+              '<td class="stat-cell">' + b.r + '</td>' +
+              '<td class="stat-cell">' + b.doubles + '</td>' +
+              '<td class="stat-cell">' + b.triples + '</td>' +
+              '<td class="stat-cell">' + b.bb + '</td>' +
+              '<td class="stat-cell">' + b.so + '</td>' +
+              '<td class="stat-cell">' + fmtAvg(b.slg) + '</td>' +
+              '<td class="stat-cell">' + fmtAvg(b.obp) + '</td>' +
+            '</tr>';
+          }).join('');
+
+        // Calculate pitching leaders
+        let pitchingLeaders = Object.values(pitchers)
+          .filter(p => p.ip >= (currentStatTab === 'pitching' ? minVal : 3))
+          .map(p => ({
+            ...p,
+            era: p.ip > 0 ? (p.er / p.ip) * 7 : 0,
+            whip: p.ip > 0 ? (p.bb + p.h) / p.ip : 0,
+            kPer7: p.ip > 0 ? (p.so / p.ip) * 7 : 0,
+          }));
+
+        // Sort pitching
+        pitchingLeaders.sort((a, b) => {
+          const av = a[pitchingSortKey] ?? 0, bv = b[pitchingSortKey] ?? 0;
+          return (av - bv) * pitchingSortDir;
+        });
+        pitchingLeaders = pitchingLeaders.slice(0, 50);
+
+        pitchingBody.innerHTML = pitchingLeaders.length === 0
+          ? '<tr><td colspan="12" class="empty-state">No qualifying pitchers found.</td></tr>'
+          : pitchingLeaders.map((p, i) => {
+            const rank = i + 1;
+            const rc = rank <= 3 ? ' rank-' + rank : '';
+            return '<tr>' +
+              '<td class="rank-cell' + rc + '">' + rank + '</td>' +
+              '<td class="player-name">' + esc(p.name) + '</td>' +
+              '<td class="team-name">' + esc(p.team) + '</td>' +
+              '<td class="stat-cell">' + p.games + '</td>' +
+              '<td class="stat-cell">' + p.ip.toFixed(1) + '</td>' +
+              '<td class="stat-cell stat-highlight">' + p.era.toFixed(2) + '</td>' +
+              '<td class="stat-cell">' + p.so + '</td>' +
+              '<td class="stat-cell">' + p.bb + '</td>' +
+              '<td class="stat-cell">' + p.whip.toFixed(2) + '</td>' +
+              '<td class="stat-cell">' + p.h + '</td>' +
+              '<td class="stat-cell">' + p.er + '</td>' +
+              '<td class="stat-cell">' + p.kPer7.toFixed(1) + '</td>' +
+            '</tr>';
+          }).join('');
+
+      } catch (err) {
+        console.error('Leaderboard error:', err);
+        showEmpty(battingBody, 'Error loading stats.');
+        showEmpty(pitchingBody, 'Error loading stats.');
+      }
+    }
+
+    // ===== STANDINGS =====
+    async function loadStandings() {
+      const body = document.getElementById('standingsBody');
+      showLoading(body);
+
+      try {
+        const eventName = document.getElementById('standingsEventFilter').value;
+
+        let query = sb.from('ec_games')
+          .select('home_score, away_score, home_team_id, away_team_id, age_group, event_name')
+          .eq('status', 'final');
+        if (currentAge) query = query.eq('age_group', currentAge);
+        if (eventName) query = query.eq('event_name', eventName);
+        const { data: games } = await query;
+
+        if (!games || games.length === 0) {
+          showEmpty(body, 'No completed games found.');
+          return;
+        }
+
+        // Get team names
+        const teamIds = [...new Set(games.flatMap(g => [g.home_team_id, g.away_team_id]).filter(Boolean))];
+        const { data: teams } = await sb.from('ec_teams').select('id, team_name').in('id', teamIds.length ? teamIds : ['none']);
+        const teamMap = {};
+        (teams || []).forEach(t => teamMap[t.id] = t.team_name);
+
+        // Calculate W-L
+        const standings = {};
+        for (const g of games) {
+          const homeName = teamMap[g.home_team_id] || 'Unknown';
+          const awayName = teamMap[g.away_team_id] || 'Unknown';
+          if (homeName.startsWith('TBD') || awayName.startsWith('TBD')) continue;
+
+          if (!standings[homeName]) standings[homeName] = { team: homeName, w:0, l:0, rs:0, ra:0 };
+          if (!standings[awayName]) standings[awayName] = { team: awayName, w:0, l:0, rs:0, ra:0 };
+
+          standings[homeName].rs += g.home_score || 0;
+          standings[homeName].ra += g.away_score || 0;
+          standings[awayName].rs += g.away_score || 0;
+          standings[awayName].ra += g.home_score || 0;
+
+          if (g.home_score > g.away_score) { standings[homeName].w++; standings[awayName].l++; }
+          else if (g.away_score > g.home_score) { standings[awayName].w++; standings[homeName].l++; }
+        }
+
+        const rows = Object.values(standings)
+          .map(t => ({ ...t, pct: (t.w + t.l) > 0 ? t.w / (t.w + t.l) : 0, diff: t.rs - t.ra }))
+          .sort((a, b) => b.pct - a.pct || b.diff - a.diff);
+
+        body.innerHTML = rows.length === 0
+          ? '<tr><td colspan="8" class="empty-state">No standings data.</td></tr>'
+          : rows.map((t, i) => {
+            const rank = i + 1;
+            const rc = rank <= 3 ? ' rank-' + rank : '';
+            const diffClass = t.diff > 0 ? 'positive' : t.diff < 0 ? 'negative' : '';
+            const diffStr = t.diff > 0 ? '+' + t.diff : '' + t.diff;
+            return '<tr>' +
+              '<td class="rank-cell' + rc + '">' + rank + '</td>' +
+              '<td class="player-name">' + esc(t.team) + '</td>' +
+              '<td class="stat-cell">' + t.w + '</td>' +
+              '<td class="stat-cell">' + t.l + '</td>' +
+              '<td class="stat-cell stat-highlight">' + t.pct.toFixed(3).replace(/^0/, '') + '</td>' +
+              '<td class="stat-cell">' + t.rs + '</td>' +
+              '<td class="stat-cell">' + t.ra + '</td>' +
+              '<td class="stat-cell ' + diffClass + '">' + diffStr + '</td>' +
+            '</tr>';
+          }).join('');
+      } catch (err) {
+        console.error('Standings error:', err);
+        showEmpty(body, 'Error loading standings.');
+      }
+    }
+
+    // ===== RECENT GAMES =====
+    async function loadGames() {
+      const grid = document.getElementById('gamesGrid');
+      grid.innerHTML = '<div class="loading" style="grid-column:1/-1;"><div class="spinner"></div> Loading...</div>';
+
+      try {
+        const eventName = document.getElementById('gamesEventFilter').value;
+
+        let query = sb.from('ec_games')
+          .select('*, home_team:ec_teams!home_team_id(team_name), away_team:ec_teams!away_team_id(team_name)')
+          .order('game_date', { ascending: false })
+          .limit(50);
+        if (currentAge) query = query.eq('age_group', currentAge);
+        if (eventName) query = query.eq('event_name', eventName);
+        const { data: games } = await query;
+
+        if (!games || games.length === 0) {
+          grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1;"><p>No games found.</p></div>';
+          return;
+        }
+
+        grid.innerHTML = games.map(g => {
+          const homeName = g.home_team?.team_name || 'TBD';
+          const awayName = g.away_team?.team_name || 'TBD';
+          const hs = g.home_score ?? '-';
+          const as = g.away_score ?? '-';
+          const homeWin = g.status === 'final' && g.home_score > g.away_score;
+          const awayWin = g.status === 'final' && g.away_score > g.home_score;
+          const statusClass = g.status === 'final' ? 'status-final' : g.status === 'live' ? 'status-live' : 'status-pending';
+          const statusText = g.status === 'final' ? 'Final' : g.status === 'live' ? 'Live' : 'Upcoming';
+          const dateStr = g.game_date ? new Date(g.game_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
+          const ageStr = g.age_group || '';
+
+          return '<div class="game-card">' +
+            '<div class="game-meta">' +
+              '<span>' + ageStr + (ageStr && dateStr ? ' &middot; ' : '') + dateStr + (g.field ? ' &middot; ' + esc(g.field) : '') + '</span>' +
+              '<span class="game-status ' + statusClass + '">' + statusText + '</span>' +
+            '</div>' +
+            '<div class="game-teams">' +
+              '<div class="game-team">' +
+                '<span class="game-team-name ' + (awayWin ? 'winner' : homeWin ? 'loser' : '') + '">' + esc(awayName) + '</span>' +
+                '<span class="game-score ' + (awayWin ? 'winner' : homeWin ? 'loser' : '') + '">' + as + '</span>' +
+              '</div>' +
+              '<div class="game-divider"></div>' +
+              '<div class="game-team">' +
+                '<span class="game-team-name ' + (homeWin ? 'winner' : awayWin ? 'loser' : '') + '">' + esc(homeName) + '</span>' +
+                '<span class="game-score ' + (homeWin ? 'winner' : awayWin ? 'loser' : '') + '">' + hs + '</span>' +
+              '</div>' +
+            '</div>' +
+          '</div>';
+        }).join('');
+      } catch (err) {
+        console.error('Games error:', err);
+        grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1;"><p>Error loading games.</p></div>';
+      }
+    }
+
+    // ===== COLUMN SORT (BATTING) =====
+    document.getElementById('battingPanel').addEventListener('click', function(e) {
+      const th = e.target.closest('th.sortable');
+      if (!th) return;
+      const key = th.dataset.sort;
+      if (battingSortKey === key) battingSortDir *= -1;
+      else { battingSortKey = key; battingSortDir = (key === 'so') ? 1 : -1; }
+      th.closest('thead').querySelectorAll('th').forEach(t => t.classList.remove('sorted'));
+      th.classList.add('sorted');
+      loadLeaderboards();
+    });
+
+    document.getElementById('pitchingPanel').addEventListener('click', function(e) {
+      const th = e.target.closest('th.sortable');
+      if (!th) return;
+      const key = th.dataset.sort;
+      // For pitching, lower ERA/WHIP is better, higher K is better
+      const lowerIsBetter = ['era', 'whip', 'bb', 'h', 'er'];
+      if (pitchingSortKey === key) pitchingSortDir *= -1;
+      else { pitchingSortKey = key; pitchingSortDir = lowerIsBetter.includes(key) ? 1 : -1; }
+      th.closest('thead').querySelectorAll('th').forEach(t => t.classList.remove('sorted'));
+      th.classList.add('sorted');
+      loadLeaderboards();
+    });
+
+    // ===== HELPERS =====
+    function fmtAvg(n) {
+      if (n >= 1) return n.toFixed(3);
+      return n.toFixed(3).replace(/^0/, '');
+    }
+    function esc(s) {
+      if (!s) return '';
+      const d = document.createElement('div');
+      d.textContent = s;
+      return d.innerHTML;
+    }
+
+    // ===== INIT =====
+    async function init() {
+      await loadEvents();
+      loadLeaderboards();
+    }
+    init();
+  </script>
+</body>
+</html>

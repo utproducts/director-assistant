@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Live Tournament Results</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    :root {
+      --navy: #0a1628;
+      --navy-light: #0f1e36;
+      --navy-mid: #162a4a;
+      --blue: #1e4fa0;
+      --blue-bright: #2563eb;
+      --red: #c8102e;
+      --red-dark: #a50d24;
+      --white: #ffffff;
+      --text-primary: #f0f4fa;
+      --text-secondary: #8fa3c0;
+      --text-muted: #5a6f8a;
+      --border: #1e3355;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --gold: #d4a52a;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'DM Sans', -apple-system, sans-serif;
+      background: var(--navy);
+      color: var(--text-primary);
+      min-height: 100vh;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.8); }
+    }
+
+    .header {
+      background: linear-gradient(135deg, var(--navy) 0%, var(--navy-mid) 50%, var(--navy) 100%);
+      border-bottom: 1px solid var(--border);
+      padding: 20px 16px 16px;
+      position: relative;
+    }
+
+    .header::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, var(--red), var(--blue-bright), var(--red));
+    }
+
+    .header-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 12px;
+    }
+
+    .header-tag {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--red);
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      margin-bottom: 4px;
+    }
+
+    .header h1 {
+      font-size: 22px;
+      font-weight: 800;
+      line-height: 1.2;
+    }
+
+    .header-sub {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-top: 4px;
+    }
+
+    .live-count {
+      text-align: right;
+    }
+
+    .live-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .live-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--success);
+      animation: pulse 1.5s ease-in-out infinite;
+      box-shadow: 0 0 8px var(--success);
+    }
+
+    .live-label {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--success);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .live-number {
+      font-size: 24px;
+      font-weight: 800;
+      color: var(--white);
+    }
+
+    .live-sub {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    /* Age pills */
+    .age-pills {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .age-pill {
+      padding: 6px 16px;
+      border-radius: 20px;
+      border: none;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 700;
+      font-family: 'DM Sans', sans-serif;
+      background: var(--navy-mid);
+      color: var(--text-secondary);
+      transition: all 0.2s;
+    }
+
+    .age-pill.active {
+      background: var(--red);
+      color: var(--white);
+    }
+
+    /* View toggle */
+    .view-toggle {
+      display: flex;
+      border-bottom: 1px solid var(--border);
+      background: var(--navy-light);
+    }
+
+    .view-tab {
+      flex: 1;
+      padding: 12px 0;
+      border: none;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 700;
+      font-family: 'DM Sans', sans-serif;
+      background: transparent;
+      color: var(--text-muted);
+      border-bottom: 2px solid transparent;
+      transition: all 0.2s;
+    }
+
+    .view-tab.active {
+      color: var(--white);
+      border-bottom-color: var(--red);
+    }
+
+    /* Content */
+    .content {
+      padding: 16px;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    /* Division header */
+    .division-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 12px;
+      padding: 8px 12px;
+      border-radius: 8px;
+      background: linear-gradient(90deg, rgba(200,16,46,0.1), transparent);
+      border-left: 3px solid var(--red);
+    }
+
+    .division-age {
+      font-size: 15px;
+      font-weight: 800;
+      color: var(--white);
+    }
+
+    .division-name {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-secondary);
+    }
+
+    .division-live {
+      margin-left: auto;
+      font-size: 11px;
+      color: var(--success);
+    }
+
+    /* Game card */
+    .game-card {
+      background: var(--navy-light);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px 16px;
+      margin-bottom: 10px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .game-card.live {
+      background: linear-gradient(135deg, var(--navy-mid), var(--navy-light));
+      border-color: rgba(37, 99, 235, 0.27);
+    }
+
+    .game-card.live::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, var(--blue-bright), var(--success));
+    }
+
+    .game-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    .game-status {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .game-field {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .team-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 4px;
+    }
+
+    .team-name {
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text-secondary);
+    }
+
+    .team-name.winner {
+      font-weight: 700;
+      color: var(--white);
+    }
+
+    .team-score {
+      font-size: 20px;
+      font-weight: 800;
+    }
+
+    .team-score.winner {
+      color: var(--white);
+    }
+
+    .team-score.loser {
+      color: var(--text-secondary);
+    }
+
+    .team-score.pending {
+      color: var(--text-muted);
+    }
+
+    /* Line score */
+    .line-score {
+      margin-top: 10px;
+      border-top: 1px solid var(--border);
+      padding-top: 8px;
+    }
+
+    .line-row {
+      display: flex;
+      gap: 2px;
+      font-size: 11px;
+      font-family: monospace;
+      margin-bottom: 2px;
+    }
+
+    .line-team {
+      width: 80px;
+      color: var(--text-muted);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .line-inning {
+      width: 20px;
+      text-align: center;
+      color: var(--text-secondary);
+    }
+
+    .line-total {
+      margin-left: auto;
+      font-weight: 700;
+      color: var(--text-secondary);
+      width: 24px;
+      text-align: right;
+    }
+
+    /* Standings */
+    .standings {
+      background: var(--navy-light);
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      overflow: hidden;
+      margin-bottom: 16px;
+      font-size: 12px;
+    }
+
+    .standings-row {
+      display: grid;
+      grid-template-columns: 20px 1fr 32px 32px 40px 40px 48px;
+      gap: 4px;
+      padding: 8px 10px;
+    }
+
+    .standings-header {
+      border-bottom: 1px solid var(--border);
+      font-weight: 700;
+      color: var(--text-muted);
+    }
+
+    .standings-row:not(.standings-header) {
+      border-bottom: 1px solid rgba(30, 51, 85, 0.14);
+    }
+
+    .standings-row.first {
+      background: rgba(212, 165, 42, 0.04);
+    }
+
+    .gc-tag {
+      font-size: 9px;
+      background: rgba(16, 185, 129, 0.14);
+      color: var(--success);
+      padding: 1px 5px;
+      border-radius: 4px;
+      font-weight: 700;
+      margin-left: 4px;
+    }
+
+    /* Footer */
+    .refresh-bar {
+      padding: 8px 16px;
+      text-align: center;
+      font-size: 11px;
+      color: var(--text-muted);
+      border-top: 1px solid var(--border);
+    }
+
+    .cta-bar {
+      position: sticky;
+      bottom: 0;
+      background: linear-gradient(135deg, var(--red), var(--blue));
+      padding: 12px 16px;
+      text-align: center;
+      border-top: 1px solid rgba(212, 165, 42, 0.27);
+    }
+
+    .cta-bar span {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--white);
+    }
+
+    .cta-highlight {
+      color: var(--gold) !important;
+      font-weight: 800 !important;
+      font-family: monospace;
+    }
+
+    /* Loading */
+    .loading {
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--text-muted);
+    }
+
+    .loading-spinner {
+      width: 40px; height: 40px;
+      border: 3px solid var(--border);
+      border-top-color: var(--red);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 16px;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .no-data {
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--text-muted);
+    }
+
+    .no-data h3 {
+      margin-bottom: 8px;
+      color: var(--text-secondary);
+    }
+  </style>
+</head>
+<body>
+
+  <div id="app">
+    <div class="loading">
+      <div class="loading-spinner"></div>
+      <div>Loading tournament data...</div>
+    </div>
+  </div>
+
+  <script>
+    const sb = supabase.createClient(
+      'https://fpeogwnjvvwpeihnlbws.supabase.co',
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZwZW9nd25qdnZ3cGVpaG5sYndzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA1MDQ2MDMsImV4cCI6MjA4NjA4MDYwM30._dgDoiN5lo4Jlsq2mMDkNXBOOPYR5ZQfJ-liSNFZq6k'
+    );
+
+    const params = new URLSearchParams(window.location.search);
+    const eventId = params.get('event');
+
+    let activeAge = 'ALL';
+    let activeView = 'scores';
+
+    async function loadResults() {
+      if (!eventId) {
+        document.getElementById('app').innerHTML = `
+          <div class="no-data">
+            <h3>No event specified</h3>
+            <p>Add ?event=EVENT_ID to the URL to load tournament results.</p>
+          </div>`;
+        return;
+      }
+
+      // Load event info
+      const { data: event } = await sb.from('events').select('*').eq('id', eventId).single();
+      if (!event) {
+        document.getElementById('app').innerHTML = `
+          <div class="no-data">
+            <h3>Event not found</h3>
+            <p>This event may have been removed.</p>
+          </div>`;
+        return;
+      }
+
+      // Load teams for this event
+      const { data: teams } = await sb.from('teams').select('*').eq('event_id', eventId).order('age_group').order('name');
+
+      // Load GC links for this event
+      const { data: gcLinks } = await sb.from('gamechanger_links').select('*').eq('event_id', eventId);
+
+      // Group teams by age group
+      const ageGroups = {};
+      for (const team of (teams || [])) {
+        const age = team.age_group || 'Other';
+        if (!ageGroups[age]) ageGroups[age] = { age, teams: [] };
+        const gc = (gcLinks || []).find(l => l.matched_team_id === team.id);
+        team._gcLinked = !!gc;
+        team._gcUrl = gc ? gc.full_url : null;
+        ageGroups[age].teams.push(team);
+      }
+
+      const sortedAges = Object.keys(ageGroups).sort((a, b) => (parseInt(a) || 99) - (parseInt(b) || 99));
+      const ages = ['ALL', ...sortedAges];
+      const totalTeams = (teams || []).length;
+      const gcCount = (gcLinks || []).filter(l => l.status === 'matched' || l.status === 'published').length;
+
+      render(event, ageGroups, sortedAges, ages, gcCount);
+    }
+
+    function render(event, ageGroups, sortedAges, ages, gcCount) {
+      const filtered = activeAge === 'ALL' ? sortedAges : sortedAges.filter(a => a === activeAge);
+
+      let html = `
+        <div class="header">
+          <div class="header-top">
+            <div>
+              <div class="header-tag">USSSA Florida</div>
+              <h1>${event.name || 'Tournament'}</h1>
+              <div class="header-sub">${event.dates || ''} · ${event.location || ''}</div>
+            </div>
+            <div class="live-count">
+              <div style="display:flex;align-items:center;gap:6px;justify-content:flex-end;">
+                <span class="live-dot"></span>
+                <span class="live-label">Live</span>
+              </div>
+              <div class="live-number">${gcCount}</div>
+              <div class="live-sub">teams linked</div>
+            </div>
+          </div>
+          <div class="age-pills">
+            ${ages.map(age => `<button class="age-pill ${activeAge === age ? 'active' : ''}" onclick="setAge('${age}')">${age}</button>`).join('')}
+          </div>
+        </div>
+
+        <div class="view-toggle">
+          <button class="view-tab ${activeView === 'scores' ? 'active' : ''}" onclick="setView('scores')">⚾ Teams</button>
+          <button class="view-tab ${activeView === 'standings' ? 'active' : ''}" onclick="setView('standings')">📊 Standings</button>
+        </div>
+
+        <div class="content">`;
+
+      for (const age of filtered) {
+        const group = ageGroups[age];
+        const gcTeams = group.teams.filter(t => t._gcLinked).length;
+
+        html += `
+          <div style="margin-bottom:24px;">
+            <div class="division-header">
+              <span class="division-age">${age}</span>
+              <span class="division-name">${group.teams.length} teams</span>
+              <span class="division-live">${gcTeams > 0 ? `${gcTeams} GC linked` : ''}</span>
+            </div>`;
+
+        if (activeView === 'scores') {
+          // Show team cards
+          for (const team of group.teams) {
+            html += `
+              <div class="game-card ${team._gcLinked ? 'live' : ''}">
+                <div class="game-meta">
+                  <div>
+                    <span style="font-size:14px;font-weight:700;color:var(--white);">${team.name}</span>
+                  </div>
+                  ${team._gcLinked 
+                    ? `<span style="font-size:11px;color:var(--success);font-weight:600;">✅ GC Linked</span>`
+                    : `<span style="font-size:11px;color:var(--text-muted);">Awaiting GC Link</span>`
+                  }
+                </div>
+                <div style="font-size:12px;color:var(--text-secondary);">
+                  ${team.coach_name ? `Coach: ${team.coach_name}` : ''}
+                  ${team.city ? ` · ${team.city}` : ''}
+                </div>
+                ${team._gcUrl 
+                  ? `<a href="${team._gcUrl}" target="_blank" style="display:inline-block;margin-top:8px;font-size:12px;color:var(--blue-bright);text-decoration:underline;">View on GameChanger →</a>`
+                  : ''
+                }
+              </div>`;
+          }
+        } else {
+          // Standings view
+          html += `
+            <div class="standings">
+              <div class="standings-row standings-header">
+                <span>#</span><span>Team</span><span style="text-align:center">GC</span>
+                <span style="text-align:center"></span><span style="text-align:center"></span>
+                <span style="text-align:center"></span><span style="text-align:center"></span>
+              </div>
+              ${group.teams.map((t, i) => `
+                <div class="standings-row ${i === 0 ? 'first' : ''}">
+                  <span style="color:${i === 0 ? 'var(--gold)' : 'var(--text-muted)'};font-weight:700;">${i + 1}</span>
+                  <span style="color:var(--text-primary);font-weight:500;">${t.name}</span>
+                  <span style="text-align:center">${t._gcLinked ? '<span class="gc-tag">GC</span>' : ''}</span>
+                  <span></span><span></span><span></span><span></span>
+                </div>
+              `).join('')}
+            </div>`;
+        }
+
+        html += `</div>`;
+      }
+
+      if (filtered.length === 0) {
+        html += `<div class="no-data"><h3>No teams yet</h3><p>Teams will appear here once they are added to the event.</p></div>`;
+      }
+
+      html += `</div>
+
+        <div class="refresh-bar">
+          🔄 Auto-refreshing every 5 minutes · Powered by Director Assistant
+        </div>
+
+        <div class="cta-bar">
+          <span>📱 Want live score alerts? Text <span class="cta-highlight">SCORES</span> to <span class="cta-highlight">(941) 404-6484</span></span>
+        </div>`;
+
+      document.getElementById('app').innerHTML = html;
+    }
+
+    function setAge(age) {
+      activeAge = age;
+      loadResults();
+    }
+
+    function setView(view) {
+      activeView = view;
+      loadResults();
+    }
+
+    // Initial load
+    loadResults();
+
+    // Auto-refresh every 5 minutes
+    setInterval(loadResults, 5 * 60 * 1000);
+  </script>
+</body>
+</html>
