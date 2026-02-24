@@ -7202,16 +7202,27 @@ async function saveBcastTemplate() {
 
         // ─── CREATE new team if no exact match ───
         if (!teamId) {
-          var { data: team, error } = await sb.from('ec_teams').insert({
+          var insertObj = {
             team_name: t.team_name,
-            coach_name: t.coach_name,
+            coach_name: t.coach_name || ((t.coach_first_name || '') + ' ' + (t.coach_last_name || '')).trim(),
             coach_email: t.coach_email,
             coach_phone: t.coach_phone,
             age_group: t.age_group,
             region: (t.city && t.state) ? t.city + ', ' + t.state : '',
             event_id: eventId,
             active: true
-          }).select('id').single();
+          };
+          // DC Event Contact Report extended fields
+          if (t.coach_first_name) insertObj.coach_first_name = t.coach_first_name;
+          if (t.coach_last_name) insertObj.coach_last_name = t.coach_last_name;
+          if (t.coach_phone_2) insertObj.coach_phone_2 = t.coach_phone_2;
+          if (t.city) insertObj.team_city = t.city;
+          if (t.state) insertObj.team_state = t.state;
+          if (t.team_class) insertObj.team_class = t.team_class;
+          if (t.division_class) insertObj.division_class = t.division_class;
+          if (t.date_of_entry) insertObj.date_of_entry = t.date_of_entry;
+          if (t.dc_division_id) insertObj.dc_division_id = t.dc_division_id;
+          var { data: team, error } = await sb.from('ec_teams').insert(insertObj).select('id').single();
 
           if (error) { console.error('Team create error:', error); continue; }
           teamId = team.id;
@@ -7321,18 +7332,25 @@ async function saveBcastTemplate() {
       }
     }
 
+    // Parse Division Identifier (e.g. "211AA" → "11U", "312AAA" → "12U", "413Op" → "13U")
+    // Format: first digit = prefix, next 2 digits = age, rest = level/class
+    function parseDivisionAge(divId) {
+      if (!divId) return '';
+      var m = String(divId).match(/^\d(\d{2})/);
+      return m ? m[1] + 'U' : '';
+    }
+
     function parseCoachReport() {
       var raw = document.getElementById('coachReportText').value.trim();
       if (!raw) { showToast('Paste the coach report data first'); return; }
 
       var lines = raw.split('\n').map(function(l) { return l.trim(); }).filter(function(l) { return l; });
-      if (lines.length < 2) { showToast('Not enough data — need a header row and at least one team'); return; }
+      if (lines.length < 1) { showToast('No data found'); return; }
 
       // Detect delimiter: tab-separated or comma-separated
       var delimiter = lines[0].indexOf('\t') >= 0 ? '\t' : ',';
       var rows = lines.map(function(line) {
         if (delimiter === ',') {
-          // Handle quoted CSV fields
           var fields = []; var current = ''; var inQuotes = false;
           for (var i = 0; i < line.length; i++) {
             var ch = line[i];
@@ -7346,52 +7364,113 @@ async function saveBcastTemplate() {
         return line.split('\t');
       });
 
-      // Detect header columns
-      var header = rows[0];
-      var colMap = {};
-      for (var c = 0; c < header.length; c++) {
-        var h = String(header[c]).toLowerCase().trim();
-        if (h.indexOf('team name') >= 0 || h === 'team') colMap.team_name = c;
-        if (h.indexOf('division') >= 0 || h.indexOf('class') >= 0 || h === 'age' || h === 'age group') colMap.age_group = c;
-        if (h.indexOf('first name') >= 0 || h.indexOf('coach first') >= 0 || h.indexOf('manager first') >= 0) colMap.first_name = c;
-        if (h.indexOf('last name') >= 0 || h.indexOf('coach last') >= 0 || h.indexOf('manager last') >= 0) colMap.last_name = c;
-        if (h === 'name' || h === 'coach name' || h === 'manager name' || h === 'contact name' || h === 'coach') colMap.full_name = c;
-        if (h.indexOf('phone') >= 0) colMap.phone = c;
-        if (h.indexOf('email') >= 0 || h.indexOf('e-mail') >= 0) colMap.email = c;
-        if (h.indexOf('city') >= 0) colMap.city = c;
-        if (h.indexOf('state') >= 0) colMap.state = c;
+      // Detect if first row is a header or raw data
+      var firstRowLower = rows[0].map(function(c) { return String(c).toLowerCase().trim(); }).join(' ');
+      var hasHeaderRow = firstRowLower.indexOf('division') >= 0 || firstRowLower.indexOf('team name') >= 0 || firstRowLower.indexOf('manager') >= 0;
+
+      // Try DC Event Contact Report format: 13 tab-separated columns in fixed order
+      // Division ID | Division Identifier | Division Class | Team City | Team State | Team Class | Date of Entry | Team Name | Manager First | Manager Last | Manager Email | Manager Phone | Manager Phone 2
+      var isDCFormat = false;
+      var testRow = hasHeaderRow && rows.length > 1 ? rows[1] : rows[0];
+      if (testRow && testRow.length >= 12 && delimiter === '\t') {
+        // Check if it looks like DC format: col 0 is numeric (Division ID), col 1 has digit pattern like "211AA"
+        var col0 = String(testRow[0]).trim();
+        var col1 = String(testRow[1]).trim();
+        if (/^\d+$/.test(col0) && /^\d{3}/.test(col1)) {
+          isDCFormat = true;
+        }
+        // Also detect by header names
+        if (hasHeaderRow && firstRowLower.indexOf('division id') >= 0) {
+          isDCFormat = true;
+        }
       }
 
-      if (colMap.team_name === undefined) {
-        showToast('❌ Could not find a "Team Name" column in the header row');
-        return;
-      }
-
-      // Parse data rows
+      var dataStartRow = hasHeaderRow ? 1 : 0;
       parsedCoachReportTeams = [];
-      for (var r = 1; r < rows.length; r++) {
-        var row = rows[r];
-        var name = String(row[colMap.team_name] || '').trim();
-        if (!name) continue;
 
-        var coachName = '';
-        if (colMap.full_name !== undefined) {
-          coachName = String(row[colMap.full_name] || '').trim();
-        } else {
-          var first = colMap.first_name !== undefined ? String(row[colMap.first_name] || '').trim() : '';
-          var last = colMap.last_name !== undefined ? String(row[colMap.last_name] || '').trim() : '';
-          coachName = (first + ' ' + last).trim();
+      if (isDCFormat) {
+        // ─── DC Event Contact Report: fixed column positions ───
+        for (var r = dataStartRow; r < rows.length; r++) {
+          var row = rows[r];
+          var teamName = String(row[7] || '').trim();
+          if (!teamName) continue;
+
+          var divIdentifier = String(row[1] || '').trim();
+          var ageGroup = parseDivisionAge(divIdentifier);
+          var firstName = String(row[8] || '').trim();
+          var lastName = String(row[9] || '').trim();
+
+          parsedCoachReportTeams.push({
+            team_name: teamName,
+            age_group: ageGroup,
+            division_class: String(row[2] || '').trim(),
+            city: String(row[3] || '').trim(),
+            state: String(row[4] || '').trim(),
+            team_class: String(row[5] || '').trim(),
+            date_of_entry: String(row[6] || '').trim(),
+            coach_first_name: firstName,
+            coach_last_name: lastName,
+            coach_name: (firstName + ' ' + lastName).trim(),
+            coach_email: String(row[10] || '').trim(),
+            coach_phone: String(row[11] || '').trim(),
+            coach_phone_2: row[12] !== undefined ? String(row[12] || '').trim() : '',
+            dc_division_id: String(row[0] || '').trim(),
+            dc_division_identifier: divIdentifier
+          });
+        }
+      } else {
+        // ─── Generic header-based format (CSV/XLSX upload, other pastes) ───
+        if (!hasHeaderRow) {
+          showToast('❌ Could not detect DC format or header row');
+          return;
+        }
+        var header = rows[0];
+        var colMap = {};
+        for (var c = 0; c < header.length; c++) {
+          var h = String(header[c]).toLowerCase().trim();
+          if (h.indexOf('team name') >= 0 || h === 'team') colMap.team_name = c;
+          if (h.indexOf('division') >= 0 || h.indexOf('class') >= 0 || h === 'age' || h === 'age group') colMap.age_group = c;
+          if (h.indexOf('first name') >= 0 || h.indexOf('coach first') >= 0 || h.indexOf('manager first') >= 0) colMap.first_name = c;
+          if (h.indexOf('last name') >= 0 || h.indexOf('coach last') >= 0 || h.indexOf('manager last') >= 0) colMap.last_name = c;
+          if (h === 'name' || h === 'coach name' || h === 'manager name' || h === 'contact name' || h === 'coach') colMap.full_name = c;
+          if ((h.indexOf('phone') >= 0) && colMap.phone === undefined) colMap.phone = c;
+          if (h.indexOf('email') >= 0 || h.indexOf('e-mail') >= 0) colMap.email = c;
+          if (h.indexOf('city') >= 0) colMap.city = c;
+          if (h.indexOf('state') >= 0) colMap.state = c;
         }
 
-        parsedCoachReportTeams.push({
-          team_name: name,
-          age_group: colMap.age_group !== undefined ? String(row[colMap.age_group] || '').trim() : '',
-          coach_name: coachName,
-          coach_phone: colMap.phone !== undefined ? String(row[colMap.phone] || '').trim() : '',
-          coach_email: colMap.email !== undefined ? String(row[colMap.email] || '').trim() : '',
-          city: colMap.city !== undefined ? String(row[colMap.city] || '').trim() : '',
-          state: colMap.state !== undefined ? String(row[colMap.state] || '').trim() : ''
-        });
+        if (colMap.team_name === undefined) {
+          showToast('❌ Could not find a "Team Name" column in the header row');
+          return;
+        }
+
+        for (var r = 1; r < rows.length; r++) {
+          var row = rows[r];
+          var name = String(row[colMap.team_name] || '').trim();
+          if (!name) continue;
+
+          var coachName = '';
+          var firstName = '', lastName = '';
+          if (colMap.full_name !== undefined) {
+            coachName = String(row[colMap.full_name] || '').trim();
+          } else {
+            firstName = colMap.first_name !== undefined ? String(row[colMap.first_name] || '').trim() : '';
+            lastName = colMap.last_name !== undefined ? String(row[colMap.last_name] || '').trim() : '';
+            coachName = (firstName + ' ' + lastName).trim();
+          }
+
+          parsedCoachReportTeams.push({
+            team_name: name,
+            age_group: colMap.age_group !== undefined ? String(row[colMap.age_group] || '').trim() : '',
+            coach_first_name: firstName,
+            coach_last_name: lastName,
+            coach_name: coachName,
+            coach_phone: colMap.phone !== undefined ? String(row[colMap.phone] || '').trim() : '',
+            coach_email: colMap.email !== undefined ? String(row[colMap.email] || '').trim() : '',
+            city: colMap.city !== undefined ? String(row[colMap.city] || '').trim() : '',
+            state: colMap.state !== undefined ? String(row[colMap.state] || '').trim() : ''
+          });
+        }
       }
 
       if (parsedCoachReportTeams.length === 0) {
@@ -7404,15 +7483,20 @@ async function saveBcastTemplate() {
         '<table style="width:100%; border-collapse:collapse; font-size:12px;">' +
         '<thead><tr style="background:var(--navy-light); position:sticky; top:0;">' +
           '<th style="text-align:left; padding:8px 10px; font-weight:600; border-bottom:1px solid var(--border);">Team Name</th>' +
-          '<th style="text-align:left; padding:8px 10px; font-weight:600; border-bottom:1px solid var(--border);">Age</th>' +
+          '<th style="text-align:left; padding:8px 10px; font-weight:600; border-bottom:1px solid var(--border);">Age Group</th>' +
+          '<th style="text-align:left; padding:8px 10px; font-weight:600; border-bottom:1px solid var(--border);">Division</th>' +
+          '<th style="text-align:left; padding:8px 10px; font-weight:600; border-bottom:1px solid var(--border);">City/State</th>' +
           '<th style="text-align:left; padding:8px 10px; font-weight:600; border-bottom:1px solid var(--border);">Coach</th>' +
           '<th style="text-align:left; padding:8px 10px; font-weight:600; border-bottom:1px solid var(--border);">Phone</th>' +
           '<th style="text-align:left; padding:8px 10px; font-weight:600; border-bottom:1px solid var(--border);">Email</th>' +
         '</tr></thead><tbody>';
       parsedCoachReportTeams.forEach(function(t) {
+        var cityState = [t.city, t.state].filter(function(s) { return s; }).join(', ');
         html += '<tr style="border-bottom:1px solid var(--border);">' +
           '<td style="padding:6px 10px;">' + (t.team_name || '') + '</td>' +
           '<td style="padding:6px 10px;">' + (t.age_group || '') + '</td>' +
+          '<td style="padding:6px 10px;">' + (t.division_class || '') + '</td>' +
+          '<td style="padding:6px 10px;">' + cityState + '</td>' +
           '<td style="padding:6px 10px;">' + (t.coach_name || '') + '</td>' +
           '<td style="padding:6px 10px;">' + (t.coach_phone || '') + '</td>' +
           '<td style="padding:6px 10px;">' + (t.coach_email || '') + '</td>' +
@@ -7422,7 +7506,7 @@ async function saveBcastTemplate() {
 
       document.getElementById('coachReportPreview').innerHTML = html;
       document.getElementById('coachReportImportBtn').style.display = 'inline-flex';
-      document.getElementById('coachReportStatus').textContent = parsedCoachReportTeams.length + ' teams detected';
+      document.getElementById('coachReportStatus').textContent = parsedCoachReportTeams.length + ' teams detected' + (isDCFormat ? ' (DC format)' : '');
     }
 
     async function importCoachReport(eventId) {
