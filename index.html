@@ -2,6 +2,9 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <link rel="icon" type="image/x-icon" href="favicon.ico">
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Director Assistant by Unrivaled Connect</title>
@@ -1465,6 +1468,10 @@
           Event Central
           <span class="nav-badge" id="ecEventCount" style="background:linear-gradient(135deg,#f59e0b,#ef4444)">0</span>
         </div>
+        <div class="nav-item" onclick="switchPage('team-mgmt', this)" data-role="admin">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
+          Team Mgmt
+        </div>
         <div class="nav-item" onclick="switchPage('crm', this)" data-role="admin">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
           CRM
@@ -2197,7 +2204,15 @@
           </div>
           <div style="padding:24px;">
             <input type="hidden" id="editEventId" value="">
-            
+
+            <div style="margin-bottom:16px; padding:14px 16px; background:var(--navy-mid); border-radius:var(--radius-sm); border:1px dashed var(--border);">
+              <label style="display:block; font-size:13px; font-weight:600; margin-bottom:6px; color:var(--text-secondary);">USSSA Event URL <span style="font-weight:400; color:var(--text-muted);">(auto-fill form)</span></label>
+              <div style="display:flex; gap:8px;">
+                <input id="ecUsssaUrl" type="text" placeholder="https://flbaseball.usssa.com/event/..." style="flex:1; padding:10px 14px; border:1px solid var(--border); border-radius:var(--radius-sm); font-size:14px; background:var(--white);">
+                <button id="ecFetchBtn" onclick="fetchUsssaEventInfo()" class="btn btn-primary" style="white-space:nowrap; padding:10px 16px; font-size:13px;">Fetch Event Info</button>
+              </div>
+            </div>
+
             <div style="margin-bottom:16px;">
               <label style="display:block; font-size:13px; font-weight:600; margin-bottom:6px; color:var(--text-secondary);">Event Name</label>
               <input id="ecEventName" type="text" placeholder="e.g. Space Coast Presidents Day" style="width:100%; padding:10px 14px; border:1px solid var(--border); border-radius:var(--radius-sm); font-size:14px;">
@@ -2967,6 +2982,165 @@ This is a one-time submission — your link will be used for all events this sea
               </button>
               <div style="font-size:13px; color:var(--text-muted); margin-top:8px;">After Friday's meeting, we'll connect <a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="e49790859097a49197979785ca878b89">[email&#160;protected]</a> and enable sending</div>
             </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== TEAM MANAGEMENT PAGE ===== -->
+      <div class="page-section" id="page-team-mgmt">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:24px; flex-wrap:wrap; gap:12px;">
+          <div>
+            <h2 style="font-size:24px; font-weight:700;">Team Management</h2>
+            <p style="color:var(--text-secondary); font-size:14px; margin-top:4px;">Manage teams, merge duplicates, move divisions</p>
+          </div>
+          <button class="btn btn-primary" onclick="tmFindDuplicates()" id="tmFindDupesBtn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            Find Duplicates
+          </button>
+        </div>
+
+        <!-- Stats Summary -->
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:16px; margin-bottom:24px;">
+          <div class="card" style="padding:20px;">
+            <div style="font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:8px;">Total Teams</div>
+            <div id="tmTotalTeams" style="font-size:28px; font-weight:700;">0</div>
+          </div>
+          <div class="card" style="padding:20px;">
+            <div style="font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:8px;">With GC Link</div>
+            <div id="tmWithGcLink" style="font-size:28px; font-weight:700; color:var(--success);">0</div>
+          </div>
+          <div class="card" style="padding:20px;">
+            <div style="font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:8px;">Possible Dupes</div>
+            <div id="tmDupeCount" style="font-size:28px; font-weight:700; color:var(--warning);">0</div>
+          </div>
+          <div class="card" style="padding:20px;">
+            <div style="font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:8px;">Age Groups</div>
+            <div id="tmAgeGroups" style="font-size:28px; font-weight:700;">0</div>
+          </div>
+        </div>
+
+        <!-- Filters -->
+        <div class="card" style="padding:16px 20px; margin-bottom:16px;">
+          <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:center;">
+            <select id="tmLocationFilter" onchange="tmOnLocationChange()" style="padding:10px 14px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--navy); font-size:13px; color:var(--text-primary);">
+              <option value="">All Locations</option>
+            </select>
+            <select id="tmEventFilter" onchange="tmFilterTeams()" style="padding:10px 14px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--navy); font-size:13px; color:var(--text-primary); min-width:180px;">
+              <option value="">-- Select Event --</option>
+            </select>
+            <select id="tmAgeFilter" onchange="tmFilterTeams()" style="padding:10px 14px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--navy); font-size:13px; color:var(--text-primary);">
+              <option value="">All Ages</option>
+            </select>
+            <input type="text" id="tmSearchInput" placeholder="Search teams..." oninput="tmFilterTeams()" style="flex:1; min-width:200px; padding:10px 14px; background:var(--navy); border:1px solid var(--border); border-radius:20px; color:var(--text-primary); font-family:'DM Sans',sans-serif; font-size:13px;">
+          </div>
+        </div>
+
+        <!-- Duplicate Suggestions (hidden by default) -->
+        <div id="tmDupeSuggestions" class="card" style="padding:0; overflow:hidden; margin-bottom:16px; display:none;">
+          <div style="padding:16px 20px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
+            <h3 style="font-size:16px; font-weight:600;">Duplicate Suggestions</h3>
+            <button class="btn btn-secondary btn-sm" onclick="document.getElementById('tmDupeSuggestions').style.display='none'">Close</button>
+          </div>
+          <div id="tmDupeList" style="max-height:400px; overflow-y:auto;"></div>
+        </div>
+
+        <!-- Teams Table -->
+        <div class="card" style="padding:0; overflow:hidden;">
+          <div style="overflow-x:auto;">
+            <table class="sms-table" style="width:100%;">
+              <thead>
+                <tr>
+                  <th style="padding:12px 8px 12px 16px; width:36px;"><input type="checkbox" id="tmSelectAll" onchange="tmToggleAll(this.checked)" style="cursor:pointer;"></th>
+                  <th style="padding:12px 16px; text-align:left; font-size:12px; text-transform:uppercase; letter-spacing:0.5px; color:var(--text-muted);">Team Name</th>
+                  <th style="padding:12px 16px; text-align:center; font-size:12px; text-transform:uppercase; letter-spacing:0.5px; color:var(--text-muted);">Age</th>
+                  <th style="padding:12px 16px; text-align:center; font-size:12px; text-transform:uppercase; letter-spacing:0.5px; color:var(--text-muted);">GC</th>
+                  <th style="padding:12px 16px; text-align:center; font-size:12px; text-transform:uppercase; letter-spacing:0.5px; color:var(--text-muted);">Games</th>
+                  <th style="padding:12px 16px; text-align:left; font-size:12px; text-transform:uppercase; letter-spacing:0.5px; color:var(--text-muted);">Event(s)</th>
+                  <th style="padding:12px 16px; text-align:center; font-size:12px; text-transform:uppercase; letter-spacing:0.5px; color:var(--text-muted);">Players</th>
+                  <th style="padding:12px 16px; text-align:right; font-size:12px; text-transform:uppercase; letter-spacing:0.5px; color:var(--text-muted);">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="tmTeamRows"></tbody>
+            </table>
+          </div>
+          <div id="tmLoading" style="text-align:center; padding:40px; color:var(--text-muted);">Select an event above to view teams</div>
+        </div>
+      </div>
+
+      <!-- Floating Merge Bar -->
+      <div id="tmMergeBar" style="display:none; position:fixed; bottom:0; left:0; right:0; z-index:999; padding:12px 24px; background:var(--navy-light); border-top:2px solid var(--border); box-shadow:0 -4px 20px rgba(0,0,0,0.1); display:none; align-items:center; justify-content:center; gap:16px;">
+        <span id="tmMergeBarText" style="font-size:14px; font-weight:500;"></span>
+        <button class="btn btn-primary btn-sm" id="tmMergeBarBtn" onclick="tmShowCheckboxMerge()" style="background:var(--danger);">Merge Selected Teams</button>
+      </div>
+
+      <!-- TEAM EDIT MODAL -->
+      <div id="tmEditModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:1000; align-items:center; justify-content:center;">
+        <div style="background:var(--navy-light); border:1px solid var(--border); border-radius:var(--radius-lg); padding:32px; width:440px; max-width:90%;">
+          <h3 style="margin-bottom:20px;">Edit Team</h3>
+          <input type="hidden" id="tmEditId">
+          <div class="form-group">
+            <label>Team Name</label>
+            <input type="text" id="tmEditName" style="width:100%">
+          </div>
+          <div class="form-group">
+            <label>Age Group</label>
+            <input type="text" id="tmEditAge" placeholder="e.g. 9U, 10U, 11U" style="width:100%">
+          </div>
+          <div class="form-group">
+            <label>GC Team Link</label>
+            <input type="text" id="tmEditGcLink" placeholder="https://web.gc.com/teams/..." style="width:100%">
+          </div>
+          <div style="display:flex; gap:10px; margin-top:20px;">
+            <button class="btn btn-secondary" onclick="tmCloseModals()" style="flex:1">Cancel</button>
+            <button class="btn btn-primary" onclick="tmSaveEdit()" style="flex:1">Save</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- CHECKBOX MERGE CONFIRMATION MODAL -->
+      <div id="tmMergeModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:1000; align-items:center; justify-content:center;">
+        <div style="background:var(--navy-light); border:1px solid var(--border); border-radius:var(--radius-lg); padding:32px; width:600px; max-width:95%;">
+          <h3 style="margin-bottom:8px;">Confirm Merge</h3>
+          <p style="color:var(--text-secondary); font-size:13px; margin-bottom:20px;">All games, stats, and players will be transferred to the keeper. The other team will be deleted.</p>
+
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:24px;">
+            <div style="border:2px solid var(--success); border-radius:var(--radius); padding:16px; background:rgba(16,185,129,0.05);">
+              <div style="font-size:11px; text-transform:uppercase; letter-spacing:1px; color:var(--success); margin-bottom:10px; font-weight:700;">KEEPER</div>
+              <div id="tmCbKeepName" style="font-size:15px; font-weight:600; margin-bottom:6px;"></div>
+              <div id="tmCbKeepDetails" style="font-size:12px; color:var(--text-muted); line-height:1.6;"></div>
+            </div>
+            <div style="border:2px solid var(--danger); border-radius:var(--radius); padding:16px; background:rgba(239,68,68,0.05);">
+              <div style="font-size:11px; text-transform:uppercase; letter-spacing:1px; color:var(--danger); margin-bottom:10px; font-weight:700;">WILL BE DELETED</div>
+              <div id="tmCbDelName" style="font-size:15px; font-weight:600; margin-bottom:6px;"></div>
+              <div id="tmCbDelDetails" style="font-size:12px; color:var(--text-muted); line-height:1.6;"></div>
+            </div>
+          </div>
+
+          <div style="display:flex; gap:10px;">
+            <button class="btn btn-secondary" onclick="tmCloseModals()" style="flex:1">Cancel</button>
+            <button class="btn btn-primary" id="tmCbMergeBtn" onclick="tmExecuteCheckboxMerge()" style="flex:1; background:var(--danger);">Confirm Merge</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- MOVE DIVISION MODAL -->
+      <div id="tmMoveModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:1000; align-items:center; justify-content:center;">
+        <div style="background:var(--navy-light); border:1px solid var(--border); border-radius:var(--radius-lg); padding:32px; width:400px; max-width:90%;">
+          <h3 style="margin-bottom:20px;">Move Division</h3>
+          <input type="hidden" id="tmMoveId">
+          <p style="color:var(--text-secondary); font-size:13px; margin-bottom:16px;">Move <strong id="tmMoveTeamName"></strong> and all their games to a new age group.</p>
+          <div class="form-group">
+            <label>New Age Group</label>
+            <select id="tmMoveAge" style="width:100%">
+              <option value="8U">8U</option><option value="9U">9U</option><option value="10U">10U</option>
+              <option value="11U">11U</option><option value="12U">12U</option><option value="13U">13U</option>
+              <option value="14U">14U</option><option value="15U">15U</option><option value="16U">16U</option>
+              <option value="17U">17U</option><option value="18U">18U</option>
+            </select>
+          </div>
+          <div style="display:flex; gap:10px; margin-top:20px;">
+            <button class="btn btn-secondary" onclick="tmCloseModals()" style="flex:1">Cancel</button>
+            <button class="btn btn-blue" onclick="tmExecuteMove()" style="flex:1">Move Division</button>
           </div>
         </div>
       </div>
@@ -3974,6 +4148,7 @@ This is a one-time submission — your link will be used for all events this sea
     function closeModals() {
       document.getElementById('addEventModal').style.display = 'none';
       document.getElementById('addTeamModal').style.display = 'none';
+      tmCloseModals();
     }
 
     async function addNewEvent() {
@@ -5071,8 +5246,8 @@ function showPlayerHistory(id) {
         } else {
           tbody.innerHTML = data.map(c => {
 var gcBadge = '<span style="color:#f59e0b;">Pending</span>';
-            if (c.gc_status === 'submitted') gcBadge = '<span style="color:#2ecc71;">✓ Submitted</span> <button data-gcid="' + c.id + '" onclick="editGcLink(this.dataset.gcid)" style="background:none;border:none;color:#3b82f6;cursor:pointer;font-size:12px;padding:0;margin-left:4px;">Edit</button>';
-            if (c.gc_status === 'confirmed') gcBadge = '<span style="color:#2ecc71;font-weight:600;">✓ Confirmed</span> <button data-gcid="' + c.id + '" onclick="editGcLink(this.dataset.gcid)" style="background:none;border:none;color:#3b82f6;cursor:pointer;font-size:12px;padding:0;margin-left:4px;">Edit</button>';
+            if (c.gc_status === 'submitted') gcBadge = '<span style="color:#2ecc71;">✓ Submitted</span> <button data-gcid="' + c.id + '" onclick="editCrmGcLink(this.dataset.gcid)" style="background:none;border:none;color:#3b82f6;cursor:pointer;font-size:12px;padding:0;margin-left:4px;">Edit</button>';
+            if (c.gc_status === 'confirmed') gcBadge = '<span style="color:#2ecc71;font-weight:600;">✓ Confirmed</span> <button data-gcid="' + c.id + '" onclick="editCrmGcLink(this.dataset.gcid)" style="background:none;border:none;color:#3b82f6;cursor:pointer;font-size:12px;padding:0;margin-left:4px;">Edit</button>';
             if (c.gc_status === 'no_gc') gcBadge = '<span style="color:var(--text-muted);">No GC</span>';
             return '<tr style="border-bottom:1px solid var(--border); cursor:pointer;" onmouseover="this.style.background=\'rgba(255,255,255,0.02)\'" onmouseout="this.style.background=\'transparent\'">' +
               '<td style="padding:10px 16px;"><div style="font-weight:600;">' + (c.team_name || '—') + '</div></td>' +
@@ -5458,7 +5633,7 @@ var gcBadge = '<span style="color:#f59e0b;">Pending</span>';
   document.getElementById('smsChatPanel').classList.remove('sms-mobile-open');
   smsActivePhone = null; 
 }
-async function editGcLink(contactId) {
+async function editCrmGcLink(contactId) {
   var currentUrl = '';
   try {
     const { data } = await sb.from('crm_contacts').select('gc_team_url').eq('id', contactId).single();
@@ -5471,12 +5646,12 @@ async function editGcLink(contactId) {
     '<input type="text" id="gcEditInput" value="' + (currentUrl || '') + '" placeholder="https://web.gc.com/teams/..." style="width:100%;padding:12px;background:var(--navy);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text-primary);font-family:DM Sans,sans-serif;font-size:14px;margin-bottom:16px;">' +
     '<div style="display:flex;gap:8px;justify-content:flex-end;">' +
     '<button onclick="this.closest(\'div[style*=fixed]\').remove()" style="padding:10px 20px;background:var(--navy);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text-primary);cursor:pointer;">Cancel</button>' +
-    '<button onclick="saveGcLink(\'' + contactId + '\')" style="padding:10px 20px;background:var(--red);border:none;border-radius:var(--radius-sm);color:#fff;cursor:pointer;font-weight:600;">Save</button>' +
+    '<button onclick="saveCrmGcLink(\'' + contactId + '\')" style="padding:10px 20px;background:var(--red);border:none;border-radius:var(--radius-sm);color:#fff;cursor:pointer;font-weight:600;">Save</button>' +
     '</div></div>';
   document.body.appendChild(modal);
 }
 
-async function saveGcLink(contactId) {
+async function saveCrmGcLink(contactId) {
   const url = document.getElementById('gcEditInput').value.trim();
   const gcMatch = url.match(/teams\/([A-Za-z0-9]+)/);
   const gcTeamId = gcMatch ? gcMatch[1] : null;
@@ -6056,6 +6231,9 @@ async function saveGcLink(contactId) {
       }
       if (page === 'admin-users' && typeof loadAdminUsers === 'function') {
         loadAdminUsers();
+      }
+      if (page === 'team-mgmt' && typeof tmLoadTeams === 'function') {
+        tmLoadTeams();
       }
     }
 
@@ -6849,6 +7027,7 @@ async function saveBcastTemplate() {
           }
         });
       } else {
+        document.getElementById('ecUsssaUrl').value = '';
         document.getElementById('ecEventName').value = '';
         document.getElementById('ecStartDate').value = '';
         document.getElementById('ecEndDate').value = '';
@@ -6979,37 +7158,87 @@ async function saveBcastTemplate() {
     
     async function createTeamsFromRoster(eventId) {
       if (pendingRosterTeams.length === 0) return 0;
-      
-      var created = 0;
+
+      var created = 0, matched = 0, skippedLinks = 0;
       for (var i = 0; i < pendingRosterTeams.length; i++) {
         var t = pendingRosterTeams[i];
-        
-        // Create team
-        var { data: team, error } = await sb.from('ec_teams').insert({
-          team_name: t.team_name,
-          coach_name: t.coach_name,
-          coach_email: t.coach_email,
-          coach_phone: t.coach_phone,
-          age_group: t.age_group,
-          region: (t.city && t.state) ? t.city + ', ' + t.state : '',
-          event_id: eventId,
-          active: true
-        }).select('id').single();
-        
-        if (error) { console.error('Team create error:', error); continue; }
-        
-        // Link to event
-        await sb.from('ec_event_teams').insert({
-          event_id: eventId,
-          team_id: team.id,
-          age_group: t.age_group
-        });
-        
-        created++;
+        var teamId = null;
+        var cleanPhone = (t.coach_phone || '').replace(/\D/g, '').slice(-10);
+
+        // ─── DEDUP: check for existing ec_teams record ───
+        if (cleanPhone && t.team_name && t.age_group) {
+          // Exact match: phone + team_name (case-insensitive) + age_group
+          var { data: exactHits } = await sb.from('ec_teams')
+            .select('id, team_name, coach_phone, gc_team_id, gc_team_link')
+            .ilike('team_name', t.team_name)
+            .eq('age_group', t.age_group);
+          // Filter by normalized phone in JS (Supabase can't normalize in query)
+          var exactMatch = (exactHits || []).find(function(row) {
+            return (row.coach_phone || '').replace(/\D/g, '').slice(-10) === cleanPhone;
+          });
+
+          if (exactMatch) {
+            teamId = exactMatch.id;
+            matched++;
+            console.log('♻️ Reusing existing team: ' + exactMatch.team_name +
+              (exactMatch.gc_team_id ? ' (has GC link: ' + exactMatch.gc_team_id + ')' : ' (no GC link)'));
+          }
+        }
+
+        // Loose match logging (phone + age_group only, no auto-match)
+        if (!teamId && cleanPhone && t.age_group) {
+          var { data: looseHits } = await sb.from('ec_teams')
+            .select('id, team_name, coach_phone, age_group, gc_team_id')
+            .eq('age_group', t.age_group);
+          var looseMatch = (looseHits || []).find(function(row) {
+            return (row.coach_phone || '').replace(/\D/g, '').slice(-10) === cleanPhone;
+          });
+          if (looseMatch) {
+            console.log('⚠️ Possible match (different name): CSV "' + t.team_name +
+              '" vs existing "' + looseMatch.team_name + '" — creating new record');
+          }
+        }
+
+        // ─── CREATE new team if no exact match ───
+        if (!teamId) {
+          var { data: team, error } = await sb.from('ec_teams').insert({
+            team_name: t.team_name,
+            coach_name: t.coach_name,
+            coach_email: t.coach_email,
+            coach_phone: t.coach_phone,
+            age_group: t.age_group,
+            region: (t.city && t.state) ? t.city + ', ' + t.state : '',
+            event_id: eventId,
+            active: true
+          }).select('id').single();
+
+          if (error) { console.error('Team create error:', error); continue; }
+          teamId = team.id;
+          created++;
+        }
+
+        // ─── LINK to event (skip if already linked) ───
+        var { data: existingLink } = await sb.from('ec_event_teams')
+          .select('id')
+          .eq('event_id', eventId)
+          .eq('team_id', teamId)
+          .limit(1);
+
+        if (existingLink && existingLink.length > 0) {
+          skippedLinks++;
+          console.log('⏭️ Team already linked to event, skipping: ' + t.team_name);
+        } else {
+          await sb.from('ec_event_teams').insert({
+            event_id: eventId,
+            team_id: teamId,
+            age_group: t.age_group
+          });
+        }
       }
-      
+
+      console.log('📋 Roster import: ' + matched + ' matched existing, ' + created + ' newly created, ' + skippedLinks + ' duplicate links skipped');
       pendingRosterTeams = [];
-      return created;
+      return matched + created;
     }
     
     function uploadTeamsToExistingEvent(fileEvent, eventId) {
@@ -7097,6 +7326,40 @@ async function saveBcastTemplate() {
       // Store campaign for sending
       window.gcLinkRequestRecipients = missing;
       showToast('📨 ' + missing.length + ' GC link requests queued. Go to Campaigns to send.');
+    }
+
+async function fetchUsssaEventInfo() {
+      const url = document.getElementById('ecUsssaUrl').value.trim();
+      if (!url) { showToast('Paste a USSSA event URL first'); return; }
+      const btn = document.getElementById('ecFetchBtn');
+      btn.disabled = true;
+      btn.textContent = 'Fetching...';
+      try {
+        const res = await fetch(API_BASE + '/api/ec/fetch-event-info', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Fetch failed');
+
+        if (data.name) document.getElementById('ecEventName').value = data.name;
+        if (data.startDate) document.getElementById('ecStartDate').value = data.startDate;
+        if (data.endDate) document.getElementById('ecEndDate').value = data.endDate;
+        if (data.venue) {
+          const venueStr = data.address ? data.venue + ' — ' + data.address : data.venue;
+          document.getElementById('ecVenue').value = venueStr;
+        }
+        if (data.ageGroups && data.ageGroups.length) {
+          document.getElementById('ecAgeGroups').value = data.ageGroups.join(', ');
+        }
+        showToast('Event info loaded — review and save');
+      } catch (err) {
+        showToast('Error: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Fetch Event Info';
+      }
     }
 
 async function saveEvent() {
@@ -7467,10 +7730,19 @@ if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save Event'; }
         var res = await fetch(EC_SCRAPER_URL + '/health');
         var data = await res.json();
         var html = '';
-        if (data.scraper === 'running') {
+        var v2Running = (data.v2Sessions || 0) > 0;
+        var v1Running = data.scraper === 'running';
+        var sessions = data.sessions || [];
+
+        if (v2Running || v1Running) {
           html = '<div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;"><span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:var(--success); animation:pulse 2s infinite;"></span><span style="font-weight:600; color:var(--success);">Connected & Running</span></div>';
-          if (data.event) html += '<div style="font-size:13px; color:var(--text-secondary);">Tracking: ' + data.event + '</div>';
-          if (data.autoStop) html += '<div style="font-size:12px; color:var(--text-muted); margin-top:4px;">Auto-stop in ' + data.autoStop.minutesUntilStop + ' min</div>';
+          for (var i = 0; i < sessions.length; i++) {
+            var s = sessions[i];
+            html += '<div style="font-size:13px; color:var(--text-secondary); margin-bottom:2px;">' + (s.eventName || 'Unknown') + ' — ' + (s.teams || '?') + ' teams' + (s.type === 'v2' ? ' (fetch)' : ' (browser)') + '</div>';
+          }
+          if (v1Running && data.event && sessions.length === 0) {
+            html += '<div style="font-size:13px; color:var(--text-secondary);">Tracking: ' + data.event + '</div>';
+          }
         } else if (data.scraper === 'stopped') {
           html = '<div style="display:flex; align-items:center; gap:8px;"><span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:var(--text-muted);"></span><span style="font-weight:600; color:var(--text-muted);">Stopped</span></div>';
         } else {
@@ -7482,35 +7754,61 @@ if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save Event'; }
         el.innerHTML = '<div style="display:flex; align-items:center; gap:8px;"><span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:var(--danger);"></span><span style="color:var(--danger); font-weight:600;">Cannot reach Stats Sync service</span></div><div style="font-size:12px; color:var(--text-muted); margin-top:4px;">Service may be sleeping — try again in 30s.</div>';
       }
     }
-    
+
     async function startStatsSync() {
+      if (!currentEventDetail || !currentEventDetail.event || !currentEventDetail.event.id) {
+        showToast('No event selected — open an event first');
+        return;
+      }
+      var eventId = currentEventDetail.event.id;
+      var eventName = currentEventDetail.event.name || currentEventDetail.event.event_name || 'Unknown';
+      showToast('Starting Stats Sync for ' + eventName + '...');
       try {
-        if (!currentEventDetail || !currentEventDetail.event || !currentEventDetail.event.id) {
-          showToast('❌ No event selected — open an event first');
-          return;
-        }
-        var eventId = currentEventDetail.event.id;
-        var eventName = currentEventDetail.event.name || currentEventDetail.event.event_name || 'Unknown';
-        showToast('▶ Starting Stats Sync for ' + eventName + '...');
-        var res = await fetch(EC_SCRAPER_URL + '/scrape-event?token=' + EC_SCRAPER_SECRET, {
+        var res = await fetch(EC_SCRAPER_URL + '/scrape-event-v2?token=' + EC_SCRAPER_SECRET, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ eventId: eventId })
         });
         var data = await res.json();
-        if (data.error) { showToast('❌ ' + data.error); return; }
-        showToast('✅ Stats Sync started for ' + eventName + '! Tracking ' + (data.teamsLoaded || '?') + ' teams.');
+        if (res.status === 409) {
+          showToast('Already scraping this event');
+          setTimeout(checkStatsSyncStatus, 1000);
+          return;
+        }
+        if (data.error) {
+          showToast('Failed to start: ' + data.error);
+          return;
+        }
+        showToast('Stats Sync started — ' + (data.teamsLoaded || '?') + ' teams for ' + eventName);
         setTimeout(checkStatsSyncStatus, 2000);
-      } catch (err) { showToast('❌ Could not reach Stats Sync service'); }
+      } catch (err) {
+        showToast('Could not reach Stats Sync service');
+      }
     }
-    
+
     async function stopStatsSync() {
       if (!confirm('Stop Stats Sync? Current cycle will finish first.')) return;
+      showToast('Stopping Stats Sync...');
       try {
-        await fetch(EC_SCRAPER_URL + '/stop?token=' + EC_SCRAPER_SECRET, { method: 'POST' });
-        showToast('⏹ Stats Sync stopped');
+        var res = await fetch(EC_SCRAPER_URL + '/stop?token=' + EC_SCRAPER_SECRET, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(currentEventDetail && currentEventDetail.event ? { eventId: currentEventDetail.event.id } : {})
+        });
+        var data = await res.json();
+        if (data.status === 'stopped') {
+          showToast('Stats Sync stopped for this event');
+        } else if (data.status === 'all_stopped') {
+          showToast('All Stats Sync sessions stopped');
+        } else if (data.error) {
+          showToast('Stop failed: ' + data.error);
+        } else {
+          showToast('Stats Sync stopped');
+        }
         setTimeout(checkStatsSyncStatus, 2000);
-      } catch (err) { showToast('❌ Could not reach Stats Sync service'); }
+      } catch (err) {
+        showToast('Could not reach Stats Sync service');
+      }
     }
     
     // ═══════════════════════════════════════════════════════
@@ -7904,15 +8202,15 @@ if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save Event'; }
       }
       
       container.innerHTML = directors.map(function(d) {
-        const isAdminUser = ADMIN_EMAILS.includes((d.email || '').toLowerCase());
-        const roleBadge = isAdminUser 
+        const isAdminUser = d.role === 'admin' || ADMIN_EMAILS.includes((d.email || '').toLowerCase());
+        const roleBadge = isAdminUser
           ? '<span style="padding:2px 8px; border-radius:8px; font-size:10px; font-weight:600; color:var(--red); background:var(--red-glow); text-transform:uppercase;">Admin</span>'
           : '<span style="padding:2px 8px; border-radius:8px; font-size:10px; font-weight:600; color:var(--blue-bright); background:var(--blue-glow); text-transform:uppercase;">Director</span>';
         return '<div style="padding:14px 20px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">' +
           '<div style="flex:1; min-width:200px;">' +
             '<div style="font-size:14px; font-weight:600;">' + (d.name || 'Unnamed') + ' ' + roleBadge + '</div>' +
             '<div style="font-size:12px; color:var(--text-muted);">' + (d.email || 'No email') + '</div>' +
-            '<div style="font-size:11px; color:var(--text-muted);">' + (d.organization || '') + (d.phone_number ? ' • ' + d.phone_number : '') + '</div>' +
+            '<div style="font-size:11px; color:var(--text-muted);">' + (d.organization || '') + (d.state ? ' • ' + d.state : '') + (d.phone_number ? ' • ' + d.phone_number : '') + '</div>' +
           '</div>' +
           '<div style="display:flex; gap:8px;">' +
             '<div style="font-size:11px; color:var(--text-muted); text-align:right;">' +
@@ -7980,6 +8278,492 @@ async function addNewUser() {
 
     // Initial load
     loadECEvents();
+
+    // ===== TEAM MANAGEMENT =====
+    let tmAllTeams = [];
+    let tmTeamStats = {};
+    let tmChecked = new Set();
+    let tmCbKeeperId = null;
+    let tmCbDeleteId = null;
+    let tmAllEvents = [];
+    let tmEventTeamLinks = [];
+
+    function tmCloseModals() {
+      ['tmEditModal', 'tmMergeModal', 'tmMoveModal'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = 'none';
+      });
+    }
+
+    async function tmLoadTeams() {
+      const loading = document.getElementById('tmLoading');
+      if (loading) loading.style.display = 'block';
+
+      // Preserve current filter selections across reload
+      const prevLocation = document.getElementById('tmLocationFilter')?.value || '';
+      const prevEvent = document.getElementById('tmEventFilter')?.value || '';
+      const prevAge = document.getElementById('tmAgeFilter')?.value || '';
+
+      const { data: teams } = await sb.from('ec_teams').select('*').order('team_name');
+      tmAllTeams = teams || [];
+
+      const { data: games } = await sb.from('ec_games').select('id, home_team_id, away_team_id, event_name, event_id');
+      const { data: players } = await sb.from('ec_players').select('id, team_id');
+
+      // Fetch events and event-team links
+      const { data: events } = await sb.from('ec_events').select('id, name, event_name, venue, start_date, end_date').order('start_date', { ascending: false });
+      tmAllEvents = events || [];
+      const { data: etLinks } = await sb.from('ec_event_teams').select('event_id, team_id');
+      tmEventTeamLinks = etLinks || [];
+
+      tmTeamStats = {};
+      for (const t of tmAllTeams) {
+        tmTeamStats[t.id] = { games: 0, players: 0, events: new Set(), eventIds: new Set() };
+      }
+      for (const g of (games || [])) {
+        if (tmTeamStats[g.home_team_id]) { tmTeamStats[g.home_team_id].games++; if (g.event_name) tmTeamStats[g.home_team_id].events.add(g.event_name); if (g.event_id) tmTeamStats[g.home_team_id].eventIds.add(g.event_id); }
+        if (tmTeamStats[g.away_team_id]) { tmTeamStats[g.away_team_id].games++; if (g.event_name) tmTeamStats[g.away_team_id].events.add(g.event_name); if (g.event_id) tmTeamStats[g.away_team_id].eventIds.add(g.event_id); }
+      }
+      for (const p of (players || [])) { if (tmTeamStats[p.team_id]) tmTeamStats[p.team_id].players++; }
+
+      // Populate Location filter from unique venues
+      const venues = [...new Set(tmAllEvents.map(e => e.venue).filter(Boolean))].sort();
+      document.getElementById('tmLocationFilter').innerHTML = '<option value="">All Locations</option>' + venues.map(v => `<option value="${v}">${esc(v)}</option>`).join('');
+
+      // Populate Age filter
+      const ages = [...new Set(tmAllTeams.map(t => t.age_group).filter(Boolean))].sort((a, b) => parseInt(a) - parseInt(b));
+      document.getElementById('tmAgeFilter').innerHTML = '<option value="">All Ages</option>' + ages.map(a => `<option value="${a}">${a}</option>`).join('');
+
+      // Populate Event filter (respecting location selection)
+      tmPopulateEventFilter(prevLocation);
+
+      // Restore filter selections
+      if (prevLocation) document.getElementById('tmLocationFilter').value = prevLocation;
+      if (prevEvent) document.getElementById('tmEventFilter').value = prevEvent;
+      if (prevAge) document.getElementById('tmAgeFilter').value = prevAge;
+
+      // Update stats cards
+      document.getElementById('tmTotalTeams').textContent = tmAllTeams.length;
+      document.getElementById('tmWithGcLink').textContent = tmAllTeams.filter(t => t.gc_team_id || t.gc_team_link).length;
+      document.getElementById('tmAgeGroups').textContent = ages.length;
+
+      if (loading) loading.style.display = 'none';
+      tmChecked.clear();
+      tmUpdateMergeBar();
+      tmFilterTeams();
+    }
+
+    function tmPopulateEventFilter(locationFilter) {
+      let events = tmAllEvents;
+      if (locationFilter) events = events.filter(e => e.venue === locationFilter);
+      const sel = document.getElementById('tmEventFilter');
+      const prev = sel.value;
+      sel.innerHTML = '<option value="">-- Select Event --</option>' + events.map(e => {
+        const label = e.name || e.event_name || 'Untitled';
+        const date = e.start_date ? ' (' + e.start_date + ')' : '';
+        return `<option value="${e.id}">${esc(label)}${date}</option>`;
+      }).join('');
+      // Restore previous selection if still valid
+      if (prev && [...sel.options].some(o => o.value === prev)) sel.value = prev;
+    }
+
+    function tmOnLocationChange() {
+      const loc = document.getElementById('tmLocationFilter').value;
+      tmPopulateEventFilter(loc);
+      document.getElementById('tmEventFilter').value = '';
+      tmFilterTeams();
+    }
+
+    function tmFilterTeams() {
+      const eventFilter = document.getElementById('tmEventFilter')?.value || '';
+      const search = (document.getElementById('tmSearchInput')?.value || '').toLowerCase();
+      const ageFilter = document.getElementById('tmAgeFilter')?.value || '';
+      const tbody = document.getElementById('tmTeamRows');
+
+      // Require event selection before showing teams
+      if (!eventFilter) {
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:40px; color:var(--text-muted);">Select an event above to view teams</td></tr>';
+        return;
+      }
+
+      // Build set of team IDs in the selected event
+      const eventTeamIds = new Set(tmEventTeamLinks.filter(et => et.event_id === eventFilter).map(et => et.team_id).filter(Boolean));
+      // Also include teams with games in this event (by event_id or event_name)
+      const selectedEvent = tmAllEvents.find(e => e.id === eventFilter);
+      const selectedEventName = selectedEvent ? (selectedEvent.name || selectedEvent.event_name) : null;
+      for (const t of tmAllTeams) {
+        const s = tmTeamStats[t.id];
+        if (s && (s.eventIds.has(eventFilter) || (selectedEventName && s.events.has(selectedEventName)))) {
+          eventTeamIds.add(t.id);
+        }
+      }
+
+      const filtered = tmAllTeams.filter(t => {
+        if (!eventTeamIds.has(t.id)) return false;
+        if (search && !t.team_name.toLowerCase().includes(search)) return false;
+        if (ageFilter && t.age_group !== ageFilter) return false;
+        return true;
+      });
+
+      if (filtered.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:40px; color:var(--text-muted);">No teams found for this event</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = filtered.map(t => {
+        const s = tmTeamStats[t.id] || { games: 0, players: 0, events: new Set() };
+        const hasGc = t.gc_team_id || t.gc_team_link;
+        const evtList = [...s.events].join(', ') || '—';
+        const evtDisplay = evtList.length > 40 ? evtList.substring(0, 37) + '...' : evtList;
+        const checked = tmChecked.has(t.id) ? ' checked' : '';
+        return `<tr style="${checked ? 'background:rgba(37,99,235,0.05);' : ''}">
+          <td style="padding:12px 8px 12px 16px;"><input type="checkbox" data-team-id="${t.id}" onchange="tmToggleCheck('${t.id}', this.checked)"${checked} style="cursor:pointer;"></td>
+          <td style="padding:12px 16px; font-weight:500;">${esc(t.team_name)}</td>
+          <td style="padding:12px 16px; text-align:center;"><span style="background:var(--navy-mid); padding:3px 10px; border-radius:12px; font-size:12px; font-weight:600;">${t.age_group || '—'}</span></td>
+          <td style="padding:12px 16px; text-align:center;">${hasGc ? '<span style="color:var(--success); font-weight:600;">Yes</span>' : '<span style="color:var(--text-muted);">No</span>'}</td>
+          <td style="padding:12px 16px; text-align:center; font-weight:600;">${s.games}</td>
+          <td style="padding:12px 16px; font-size:12px; color:var(--text-secondary);" title="${esc(evtList)}">${esc(evtDisplay)}</td>
+          <td style="padding:12px 16px; text-align:center;">${s.players}</td>
+          <td style="padding:12px 16px; text-align:right; white-space:nowrap;">
+            <button class="btn btn-secondary btn-sm" onclick="tmShowEdit('${t.id}')" style="padding:4px 10px; font-size:11px;">Edit</button>
+            <button class="btn btn-secondary btn-sm" onclick="tmShowMove('${t.id}')" style="padding:4px 10px; font-size:11px;">Move</button>
+          </td>
+        </tr>`;
+      }).join('');
+    }
+
+    function esc(str) { const d = document.createElement('div'); d.textContent = str || ''; return d.innerHTML; }
+
+    // ── CHECKBOX SELECTION ──
+    function tmToggleCheck(teamId, isChecked) {
+      if (isChecked) tmChecked.add(teamId); else tmChecked.delete(teamId);
+      tmUpdateMergeBar();
+    }
+
+    function tmToggleAll(isChecked) {
+      document.querySelectorAll('#tmTeamRows input[type="checkbox"]').forEach(cb => {
+        const id = cb.dataset.teamId;
+        cb.checked = isChecked;
+        if (isChecked) tmChecked.add(id); else tmChecked.delete(id);
+      });
+      tmUpdateMergeBar();
+    }
+
+    function tmUpdateMergeBar() {
+      const bar = document.getElementById('tmMergeBar');
+      const text = document.getElementById('tmMergeBarText');
+      const btn = document.getElementById('tmMergeBarBtn');
+      const count = tmChecked.size;
+
+      if (count === 0) {
+        bar.style.display = 'none';
+        return;
+      }
+
+      bar.style.display = 'flex';
+      if (count === 1) {
+        text.textContent = '1 team selected';
+        btn.textContent = 'Select 1 more team to merge';
+        btn.disabled = true;
+        btn.style.opacity = '0.5';
+      } else if (count === 2) {
+        text.textContent = '2 teams selected';
+        btn.textContent = 'Merge Selected Teams';
+        btn.disabled = false;
+        btn.style.opacity = '1';
+      } else {
+        text.textContent = count + ' teams selected';
+        btn.textContent = 'Select exactly 2 teams to merge';
+        btn.disabled = true;
+        btn.style.opacity = '0.5';
+      }
+    }
+
+    // ── CHECKBOX MERGE ──
+    function tmPickKeeper(t1, t2) {
+      const s1 = tmTeamStats[t1.id] || { games: 0, players: 0 };
+      const s2 = tmTeamStats[t2.id] || { games: 0, players: 0 };
+      // 1. Has gc_team_id
+      if (t1.gc_team_id && !t2.gc_team_id) return { keeper: t1, dupe: t2 };
+      if (t2.gc_team_id && !t1.gc_team_id) return { keeper: t2, dupe: t1 };
+      // 2. Has gc_team_link
+      if (t1.gc_team_link && !t2.gc_team_link) return { keeper: t1, dupe: t2 };
+      if (t2.gc_team_link && !t1.gc_team_link) return { keeper: t2, dupe: t1 };
+      // 3. More games
+      if (s1.games >= s2.games) return { keeper: t1, dupe: t2 };
+      return { keeper: t2, dupe: t1 };
+    }
+
+    function tmTeamDetailHtml(t) {
+      const s = tmTeamStats[t.id] || { games: 0, players: 0, events: new Set() };
+      const hasGc = t.gc_team_id || t.gc_team_link;
+      return `Age: ${t.age_group || '—'}<br>GC Link: ${hasGc ? '<span style="color:var(--success);">Yes</span>' : 'No'}<br>Games: <strong>${s.games}</strong><br>Players: <strong>${s.players}</strong>`;
+    }
+
+    function tmShowCheckboxMerge() {
+      if (tmChecked.size !== 2) {
+        showToast('Select exactly 2 teams to merge');
+        return;
+      }
+      const ids = [...tmChecked];
+      const t1 = tmAllTeams.find(t => t.id === ids[0]);
+      const t2 = tmAllTeams.find(t => t.id === ids[1]);
+      if (!t1 || !t2) return;
+
+      const { keeper, dupe } = tmPickKeeper(t1, t2);
+      tmCbKeeperId = keeper.id;
+      tmCbDeleteId = dupe.id;
+
+      document.getElementById('tmCbKeepName').textContent = keeper.team_name;
+      document.getElementById('tmCbKeepDetails').innerHTML = tmTeamDetailHtml(keeper);
+      document.getElementById('tmCbDelName').textContent = dupe.team_name;
+      document.getElementById('tmCbDelDetails').innerHTML = tmTeamDetailHtml(dupe);
+
+      document.getElementById('tmMergeModal').style.display = 'flex';
+    }
+
+    async function tmExecuteCheckboxMerge() {
+      if (!tmCbKeeperId || !tmCbDeleteId) return;
+      const keeper = tmAllTeams.find(t => t.id === tmCbKeeperId);
+      const dupe = tmAllTeams.find(t => t.id === tmCbDeleteId);
+      if (!keeper || !dupe) return;
+
+      const btn = document.getElementById('tmCbMergeBtn');
+      btn.disabled = true;
+      btn.textContent = 'Merging...';
+      try {
+        await sb.from('ec_games').update({ home_team_id: tmCbKeeperId }).eq('home_team_id', tmCbDeleteId);
+        await sb.from('ec_games').update({ away_team_id: tmCbKeeperId }).eq('away_team_id', tmCbDeleteId);
+        await sb.from('ec_game_stats').update({ team_id: tmCbKeeperId }).eq('team_id', tmCbDeleteId);
+        await sb.from('ec_players').update({ team_id: tmCbKeeperId }).eq('team_id', tmCbDeleteId);
+        await sb.from('ec_player_of_game').update({ team_id: tmCbKeeperId }).eq('team_id', tmCbDeleteId);
+        await sb.from('ec_event_teams').update({ team_id: tmCbKeeperId }).eq('team_id', tmCbDeleteId);
+        await sb.from('ec_teams').delete().eq('id', tmCbDeleteId);
+
+        showToast('Merged "' + dupe.team_name + '" into "' + keeper.team_name + '"');
+      } catch (err) {
+        showToast('Merge error: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Confirm Merge';
+        tmCbKeeperId = null;
+        tmCbDeleteId = null;
+        tmChecked.clear();
+        tmCloseModals();
+        tmUpdateMergeBar();
+        document.getElementById('tmSelectAll').checked = false;
+        await tmLoadTeams();
+      }
+    }
+
+    // ── EDIT ──
+    function tmShowEdit(teamId) {
+      const t = tmAllTeams.find(x => x.id === teamId);
+      if (!t) return;
+      document.getElementById('tmEditId').value = t.id;
+      document.getElementById('tmEditName').value = t.team_name || '';
+      document.getElementById('tmEditAge').value = t.age_group || '';
+      document.getElementById('tmEditGcLink').value = t.gc_team_link || '';
+      document.getElementById('tmEditModal').style.display = 'flex';
+    }
+
+    async function tmSaveEdit() {
+      const id = document.getElementById('tmEditId').value;
+      const name = document.getElementById('tmEditName').value.trim();
+      const age = document.getElementById('tmEditAge').value.trim();
+      const link = document.getElementById('tmEditGcLink').value.trim();
+      if (!name) { showToast('Team name is required'); return; }
+
+      const { error } = await sb.from('ec_teams').update({
+        team_name: name, age_group: age || null, gc_team_link: link || null,
+      }).eq('id', id);
+
+      if (error) { showToast('Error: ' + error.message); return; }
+      showToast('Team updated');
+      tmCloseModals();
+      tmLoadTeams();
+    }
+
+    // ── MOVE DIVISION ──
+    function tmShowMove(teamId) {
+      const t = tmAllTeams.find(x => x.id === teamId);
+      if (!t) return;
+      document.getElementById('tmMoveId').value = t.id;
+      document.getElementById('tmMoveTeamName').textContent = t.team_name;
+      if (t.age_group) document.getElementById('tmMoveAge').value = t.age_group;
+      document.getElementById('tmMoveModal').style.display = 'flex';
+    }
+
+    async function tmExecuteMove() {
+      const id = document.getElementById('tmMoveId').value;
+      const newAge = document.getElementById('tmMoveAge').value;
+      const t = tmAllTeams.find(x => x.id === id);
+      if (!t || !newAge) return;
+
+      if (!confirm(`Move "${t.team_name}" from ${t.age_group || 'unset'} to ${newAge}?\n\nThis will also update all their games' age_group.`)) return;
+
+      showToast('Moving division...');
+      try {
+        await sb.from('ec_teams').update({ age_group: newAge }).eq('id', id);
+        await sb.from('ec_games').update({ age_group: newAge }).eq('home_team_id', id);
+        await sb.from('ec_games').update({ age_group: newAge }).eq('away_team_id', id);
+
+        showToast('Moved "' + t.team_name + '" to ' + newAge);
+        tmCloseModals();
+        tmLoadTeams();
+      } catch (err) {
+        showToast('Move error: ' + err.message);
+      }
+    }
+
+    // ── DUPLICATE DETECTION ──
+    async function tmFindDuplicates() {
+      const btn = document.getElementById('tmFindDupesBtn');
+      const eventFilter = document.getElementById('tmEventFilter')?.value || '';
+      if (!eventFilter) { showToast('Select an event first'); return; }
+
+      btn.disabled = true;
+      btn.innerHTML = 'Scanning...';
+      showToast('Scanning for duplicates in this event...');
+
+      // Build set of team IDs in the selected event
+      const eventTeamIds = new Set(tmEventTeamLinks.filter(et => et.event_id === eventFilter).map(et => et.team_id).filter(Boolean));
+      const selectedEvent = tmAllEvents.find(e => e.id === eventFilter);
+      const selectedEventName = selectedEvent ? (selectedEvent.name || selectedEvent.event_name) : null;
+      for (const t of tmAllTeams) {
+        const s = tmTeamStats[t.id];
+        if (s && (s.eventIds.has(eventFilter) || (selectedEventName && s.events.has(selectedEventName)))) {
+          eventTeamIds.add(t.id);
+        }
+      }
+
+      // Only check teams in this event
+      const scopedTeams = tmAllTeams.filter(t => eventTeamIds.has(t.id));
+      const dupes = [];
+
+      // 1. Same gc_team_id
+      const gcIdGroups = {};
+      for (const t of scopedTeams) {
+        if (!t.gc_team_id) continue;
+        if (!gcIdGroups[t.gc_team_id]) gcIdGroups[t.gc_team_id] = [];
+        gcIdGroups[t.gc_team_id].push(t);
+      }
+      for (const [gcId, group] of Object.entries(gcIdGroups)) {
+        if (group.length > 1) dupes.push({ type: 'gc_team_id', reason: 'Same GC ID: ' + gcId, teams: group });
+      }
+
+      // 2. Same lower(team_name)
+      const nameGroups = {};
+      for (const t of scopedTeams) {
+        const key = t.team_name.toLowerCase().trim();
+        if (!nameGroups[key]) nameGroups[key] = [];
+        nameGroups[key].push(t);
+      }
+      for (const [, group] of Object.entries(nameGroups)) {
+        if (group.length > 1) {
+          const alreadyInGcDupe = dupes.some(d => d.type === 'gc_team_id' && d.teams.some(t => group.some(g => g.id === t.id)));
+          if (!alreadyInGcDupe) dupes.push({ type: 'name', reason: 'Same name (case-insensitive)', teams: group });
+        }
+      }
+
+      // 3. Shared players (3+) — scoped to event teams
+      const scopedTeamIds = new Set(scopedTeams.map(t => t.id));
+      const { data: allPlayers } = await sb.from('ec_players').select('player_name, team_id');
+      if (allPlayers) {
+        const nameToTeams = {};
+        for (const p of allPlayers) {
+          if (!scopedTeamIds.has(p.team_id)) continue;
+          const key = (p.player_name || '').toLowerCase().trim();
+          if (key.length < 3) continue;
+          if (!nameToTeams[key]) nameToTeams[key] = new Set();
+          nameToTeams[key].add(p.team_id);
+        }
+        const pairCounts = {};
+        for (const [, teamIds] of Object.entries(nameToTeams)) {
+          const ids = [...teamIds];
+          for (let i = 0; i < ids.length; i++) {
+            for (let j = i + 1; j < ids.length; j++) {
+              const pk = [ids[i], ids[j]].sort().join('|');
+              pairCounts[pk] = (pairCounts[pk] || 0) + 1;
+            }
+          }
+        }
+        for (const [pk, count] of Object.entries(pairCounts)) {
+          if (count >= 3) {
+            const [id1, id2] = pk.split('|');
+            const t1 = scopedTeams.find(t => t.id === id1);
+            const t2 = scopedTeams.find(t => t.id === id2);
+            if (t1 && t2 && !dupes.some(d => d.teams.some(t => t.id === id1) && d.teams.some(t => t.id === id2))) {
+              dupes.push({ type: 'roster', reason: count + ' shared players', teams: [t1, t2] });
+            }
+          }
+        }
+      }
+
+      document.getElementById('tmDupeCount').textContent = dupes.length;
+      const container = document.getElementById('tmDupeSuggestions');
+      const list = document.getElementById('tmDupeList');
+
+      if (dupes.length === 0) {
+        showToast('No duplicates found');
+        container.style.display = 'none';
+      } else {
+        container.style.display = 'block';
+        list.innerHTML = dupes.map(d => {
+          const teamNames = d.teams.map(t => esc(t.team_name) + (t.age_group ? ' (' + t.age_group + ')' : '')).join(' &nbsp;/&nbsp; ');
+          const typeColor = d.type === 'gc_team_id' ? 'var(--danger)' : d.type === 'roster' ? 'var(--blue-bright)' : 'var(--warning)';
+          const typeLabel = d.type === 'gc_team_id' ? 'GC ID' : d.type === 'roster' ? 'ROSTER' : 'NAME';
+          const sorted = [...d.teams].sort((a, b) => {
+            if (a.gc_team_id && !b.gc_team_id) return -1;
+            if (!a.gc_team_id && b.gc_team_id) return 1;
+            return (tmTeamStats[b.id]?.games || 0) - (tmTeamStats[a.id]?.games || 0);
+          });
+          const keeper = sorted[0];
+          const dupeTeam = sorted[sorted.length - 1];
+          return `<div style="padding:12px 20px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; gap:12px;">
+            <div style="flex:1; min-width:0;">
+              <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;">
+                <span style="background:${typeColor}; color:white; padding:2px 8px; border-radius:4px; font-size:10px; font-weight:700;">${typeLabel}</span>
+                <span style="font-size:12px; color:var(--text-muted);">${esc(d.reason)}</span>
+              </div>
+              <div style="font-size:13px;">${teamNames}</div>
+            </div>
+            <button class="btn btn-sm" onclick="tmQuickMerge('${dupeTeam.id}','${keeper.id}')" style="padding:4px 12px; font-size:11px; background:var(--danger); color:white; white-space:nowrap;">Merge into ${esc(keeper.team_name).substring(0, 20)}</button>
+          </div>`;
+        }).join('');
+        showToast(dupes.length + ' duplicate group(s) found');
+      }
+
+      btn.disabled = false;
+      btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> Find Duplicates';
+    }
+
+    async function tmQuickMerge(fromId, toId) {
+      const from = tmAllTeams.find(t => t.id === fromId);
+      const to = tmAllTeams.find(t => t.id === toId);
+      if (!from || !to) return;
+      if (!confirm(`Merge "${from.team_name}" into "${to.team_name}"?\n\nAll games, stats, and players will transfer. "${from.team_name}" will be deleted.`)) return;
+
+      showToast('Merging...');
+      try {
+        await sb.from('ec_games').update({ home_team_id: toId }).eq('home_team_id', fromId);
+        await sb.from('ec_games').update({ away_team_id: toId }).eq('away_team_id', fromId);
+        await sb.from('ec_game_stats').update({ team_id: toId }).eq('team_id', fromId);
+        await sb.from('ec_players').update({ team_id: toId }).eq('team_id', fromId);
+        await sb.from('ec_player_of_game').update({ team_id: toId }).eq('team_id', fromId);
+        await sb.from('ec_event_teams').update({ team_id: toId }).eq('team_id', fromId);
+        await sb.from('ec_teams').delete().eq('id', fromId);
+
+        showToast('Merged into "' + to.team_name + '"');
+      } catch (err) {
+        showToast('Error: ' + err.message);
+      } finally {
+        tmChecked.clear();
+        tmUpdateMergeBar();
+        document.getElementById('tmSelectAll').checked = false;
+        await tmLoadTeams();
+      }
+    }
 
   </script>
 </body>
