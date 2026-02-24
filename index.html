@@ -7344,14 +7344,25 @@ async function fetchUsssaEventInfo() {
         if (!res.ok) throw new Error(data.error || 'Fetch failed');
 
         if (data.name) document.getElementById('ecEventName').value = data.name;
-        if (data.startDate) document.getElementById('ecStartDate').value = data.startDate;
-        if (data.endDate) document.getElementById('ecEndDate').value = data.endDate;
+        if (data.startDate) document.getElementById('ecStartDate').value = data.startDate.slice(0, 10);
+        if (data.endDate) document.getElementById('ecEndDate').value = data.endDate.slice(0, 10);
         if (data.venue) {
           const venueStr = data.address ? data.venue + ' — ' + data.address : data.venue;
           document.getElementById('ecVenue').value = venueStr;
         }
         if (data.ageGroups && data.ageGroups.length) {
           document.getElementById('ecAgeGroups').value = data.ageGroups.join(', ');
+        }
+        // Director info
+        if (data.directorName) document.getElementById('ecDirectorName').value = data.directorName;
+        if (data.directorEmail) document.getElementById('ecDirectorEmail').value = data.directorEmail;
+        if (data.directorPhone) document.getElementById('ecDirectorPhone').value = data.directorPhone;
+        // Stats sync schedule: first game 8AM on start date, last game 10PM on end date
+        if (data.startDate) {
+          document.getElementById('ecSyncStart').value = data.startDate.slice(0, 10) + 'T08:00';
+        }
+        if (data.endDate) {
+          document.getElementById('ecSyncStop').value = data.endDate.slice(0, 10) + 'T22:00';
         }
         showToast('Event info loaded — review and save');
       } catch (err) {
