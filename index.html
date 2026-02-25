@@ -7178,6 +7178,9 @@ async function saveBcastTemplate() {
     async function createTeamsFromRoster(eventId, onProgress) {
       if (pendingRosterTeams.length === 0) return { matched: 0, created: 0 };
 
+      // Debug: log first team object
+      console.log('📋 createTeamsFromRoster: ' + pendingRosterTeams.length + ' teams, first team:', JSON.stringify(pendingRosterTeams[0]));
+
       var created = 0, matched = 0, skippedLinks = 0;
       var total = pendingRosterTeams.length;
       for (var i = 0; i < pendingRosterTeams.length; i++) {
@@ -7187,13 +7190,11 @@ async function saveBcastTemplate() {
         var cleanPhone = (t.coach_phone || '').replace(/\D/g, '').slice(-10);
 
         // ─── DEDUP: check for existing ec_teams record ───
-        if (cleanPhone && t.team_name && t.age_group) {
-          // Exact match: phone + team_name (case-insensitive) + age_group
+        // Match by phone + team_name (any age_group) so we can update stale records
+        if (cleanPhone && t.team_name) {
           var { data: exactHits } = await sb.from('ec_teams')
-            .select('id, team_name, coach_phone, gc_team_id, gc_team_link')
-            .ilike('team_name', t.team_name)
-            .eq('age_group', t.age_group);
-          // Filter by normalized phone in JS (Supabase can't normalize in query)
+            .select('id, team_name, coach_phone, age_group, gc_team_id, gc_team_link')
+            .ilike('team_name', t.team_name);
           var exactMatch = (exactHits || []).find(function(row) {
             return (row.coach_phone || '').replace(/\D/g, '').slice(-10) === cleanPhone;
           });
@@ -7201,8 +7202,16 @@ async function saveBcastTemplate() {
           if (exactMatch) {
             teamId = exactMatch.id;
             matched++;
-            console.log('♻️ Reusing existing team: ' + exactMatch.team_name +
-              (exactMatch.gc_team_id ? ' (has GC link: ' + exactMatch.gc_team_id + ')' : ' (no GC link)'));
+            // Update age_group and other fields on matched team if they were empty
+            var updateObj = {};
+            if (t.age_group && exactMatch.age_group !== t.age_group) updateObj.age_group = t.age_group;
+            if (t.coach_name && !exactMatch.coach_name) updateObj.coach_name = t.coach_name;
+            if (Object.keys(updateObj).length > 0) {
+              await sb.from('ec_teams').update(updateObj).eq('id', teamId);
+              console.log('📝 Updated existing team "' + exactMatch.team_name + '": ' + JSON.stringify(updateObj));
+            }
+            console.log('♻️ Reusing existing team: ' + exactMatch.team_name + ' (age: ' + (exactMatch.age_group || 'EMPTY') + ' → ' + (t.age_group || 'EMPTY') + ')' +
+              (exactMatch.gc_team_id ? ' (has GC link)' : ''));
           }
         }
 
@@ -7242,9 +7251,10 @@ async function saveBcastTemplate() {
           if (t.division_class) insertObj.division_class = t.division_class;
           if (t.date_of_entry) insertObj.date_of_entry = t.date_of_entry;
           if (t.dc_division_id) insertObj.dc_division_id = t.dc_division_id;
+          if (i === 0) console.log('📋 First team insertObj:', JSON.stringify(insertObj));
           var { data: team, error } = await sb.from('ec_teams').insert(insertObj).select('id').single();
 
-          if (error) { console.error('Team create error:', error); continue; }
+          if (error) { console.error('❌ Team create error for "' + t.team_name + '":', error.message, error); continue; }
           teamId = team.id;
           created++;
         }
@@ -7266,7 +7276,8 @@ async function saveBcastTemplate() {
             age_group: t.age_group
           };
           if (t.dc_division_id) linkObj.dc_division_id = t.dc_division_id;
-          await sb.from('ec_event_teams').insert(linkObj);
+          var { error: linkErr } = await sb.from('ec_event_teams').insert(linkObj);
+          if (linkErr) console.error('❌ Event link error for "' + t.team_name + '":', linkErr.message);
         }
       }
 
