@@ -7443,6 +7443,15 @@ async function saveBcastTemplate() {
 
       if (isDCFormat) {
         // ─── DC Event Contact Report: fixed column positions ───
+        // Debug: log first data row column mapping
+        var debugRow = rows[dataStartRow];
+        if (debugRow) {
+          console.log('🔍 DC Parser Debug — Row has ' + debugRow.length + ' columns (hasHeader=' + hasHeaderRow + ', dataStartRow=' + dataStartRow + '):');
+          for (var di = 0; di < debugRow.length; di++) {
+            console.log('  [' + di + '] = "' + String(debugRow[di] || '').trim() + '"');
+          }
+        }
+
         for (var r = dataStartRow; r < rows.length; r++) {
           var row = rows[r];
           var teamName = String(row[7] || '').trim();
@@ -7531,8 +7540,20 @@ async function saveBcastTemplate() {
         return;
       }
 
+      // Render debug dump of first raw row
+      var debugRow = rows[dataStartRow];
+      var debugHtml = '';
+      if (debugRow && isDCFormat) {
+        debugHtml = '<div style="margin-bottom:8px; padding:8px 10px; background:#fff3cd; border:1px solid #ffc107; border-radius:4px; font-family:\'Space Mono\',monospace; font-size:11px; max-height:120px; overflow-y:auto;">' +
+          '<strong>Debug: First row (' + debugRow.length + ' cols, hasHeader=' + hasHeaderRow + '):</strong><br>';
+        for (var di = 0; di < debugRow.length; di++) {
+          debugHtml += '[' + di + '] = <code>"' + String(debugRow[di] || '').replace(/</g, '&lt;') + '"</code><br>';
+        }
+        debugHtml += '</div>';
+      }
+
       // Render preview table
-      var html = '<div style="max-height:300px; overflow-y:auto; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--white);">' +
+      var html = debugHtml + '<div style="max-height:300px; overflow-y:auto; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--white);">' +
         '<table style="width:100%; border-collapse:collapse; font-size:12px;">' +
         '<thead><tr style="background:var(--navy-light); position:sticky; top:0;">' +
           '<th style="text-align:left; padding:8px 10px; font-weight:600; border-bottom:1px solid var(--border);">Team Name</th>' +
