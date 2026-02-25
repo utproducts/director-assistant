@@ -7420,14 +7420,14 @@ async function saveBcastTemplate() {
       var hasHeaderRow = firstRowLower.indexOf('division') >= 0 || firstRowLower.indexOf('team name') >= 0 || firstRowLower.indexOf('manager') >= 0;
 
       // Try DC Event Contact Report format: 13 tab-separated columns in fixed order
-      // Division ID | Division Identifier | Division Class | Team City | Team State | Team Class | Date of Entry | Team Name | Manager First | Manager Last | Manager Email | Manager Phone | Manager Phone 2
+      // Col 0: Division ID | 1: Division Identifier (age_group) | 2: Division Class | 3: City | 4: State | 5: Team Class | 6: Date of Entry | 7: Team Name | 8: First | 9: Last | 10: Email | 11: Phone | 12: Phone 2
       var isDCFormat = false;
       var testRow = hasHeaderRow && rows.length > 1 ? rows[1] : rows[0];
       if (testRow && testRow.length >= 12 && delimiter === '\t') {
-        // Check if it looks like DC format: col 0 is numeric (Division ID), col 1 has digit pattern like "211AA"
+        // Check if it looks like DC format: col 0 is numeric (Division ID), col 1 has age+level like "11AAA"
         var col0 = String(testRow[0]).trim();
         var col1 = String(testRow[1]).trim();
-        if (/^\d+$/.test(col0) && /^\d{3}/.test(col1)) {
+        if (/^\d+$/.test(col0) && /^\d+\w/.test(col1)) {
           isDCFormat = true;
         }
         // Also detect by header names
@@ -7446,8 +7446,8 @@ async function saveBcastTemplate() {
           var teamName = String(row[7] || '').trim();
           if (!teamName) continue;
 
-          var divIdentifier = String(row[1] || '').trim();
-          var ageGroup = parseDivisionAge(divIdentifier);
+          // Column 1 = Division Identifier — use as-is for age_group (e.g. "11AAA", "13Op")
+          var ageGroup = String(row[1] || '').trim();
           var firstName = String(row[8] || '').trim();
           var lastName = String(row[9] || '').trim();
 
@@ -7466,7 +7466,7 @@ async function saveBcastTemplate() {
             coach_phone: String(row[11] || '').trim(),
             coach_phone_2: row[12] !== undefined ? String(row[12] || '').trim() : '',
             dc_division_id: String(row[0] || '').trim(),
-            dc_division_identifier: divIdentifier
+            dc_division_identifier: ageGroup
           });
         }
       } else {
