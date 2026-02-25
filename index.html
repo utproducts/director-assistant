@@ -7388,247 +7388,86 @@ async function saveBcastTemplate() {
       reader.readAsArrayBuffer(file);
     }
 
-    var parsedCoachReportTeams = [];
-
     function toggleCoachReportPaste(eventId) {
       var section = document.getElementById('coachReportSection');
       if (section.style.display === 'none') {
         section.style.display = 'block';
         document.getElementById('coachReportText').value = '';
-        document.getElementById('coachReportPreview').innerHTML = '';
-        document.getElementById('coachReportImportBtn').style.display = 'none';
         document.getElementById('coachReportStatus').textContent = '';
-        parsedCoachReportTeams = [];
       } else {
         section.style.display = 'none';
       }
     }
 
-    // Parse Division Identifier: strip first digit (region prefix), rest is age+level
-    // "211AA" → "11AA", "312AAA" → "12AAA", "413Op" → "13Op", "29Op" → "9Op"
-    function parseDivisionAge(divId) {
-      if (!divId) return '';
-      var m = String(divId).match(/^\d(\d+\w+)$/);
-      return m ? m[1] : '';
+    function csvEscape(val) {
+      var s = String(val || '');
+      if (s.indexOf(',') >= 0 || s.indexOf('"') >= 0 || s.indexOf('\n') >= 0) {
+        return '"' + s.replace(/"/g, '""') + '"';
+      }
+      return s;
     }
 
-    function parseCoachReport() {
+    function generateCoachReportCSV() {
       var raw = document.getElementById('coachReportText').value.trim();
       if (!raw) { showToast('Paste the coach report data first'); return; }
 
       var lines = raw.split('\n').map(function(l) { return l.trim(); }).filter(function(l) { return l; });
       if (lines.length < 1) { showToast('No data found'); return; }
 
-      // Detect delimiter: tab-separated or comma-separated
-      var delimiter = lines[0].indexOf('\t') >= 0 ? '\t' : ',';
-      var rows = lines.map(function(line) {
-        if (delimiter === ',') {
-          var fields = []; var current = ''; var inQuotes = false;
-          for (var i = 0; i < line.length; i++) {
-            var ch = line[i];
-            if (ch === '"') { inQuotes = !inQuotes; }
-            else if (ch === ',' && !inQuotes) { fields.push(current.trim()); current = ''; }
-            else { current += ch; }
-          }
-          fields.push(current.trim());
-          return fields;
-        }
-        return line.split('\t');
-      });
+      // Split on tabs
+      var rows = lines.map(function(line) { return line.split('\t'); });
 
-      // Detect if first row is a header or raw data
+      // Detect if first row is headers
       var firstRowLower = rows[0].map(function(c) { return String(c).toLowerCase().trim(); }).join(' ');
       var hasHeaderRow = firstRowLower.indexOf('division') >= 0 || firstRowLower.indexOf('team name') >= 0 || firstRowLower.indexOf('manager') >= 0;
-
-      // Try DC Event Contact Report format: 13 tab-separated columns in fixed order
-      // Col 0: Division ID | 1: Division Identifier (age_group) | 2: Division Class | 3: City | 4: State | 5: Team Class | 6: Date of Entry | 7: Team Name | 8: First | 9: Last | 10: Email | 11: Phone | 12: Phone 2
-      var isDCFormat = false;
-      var testRow = hasHeaderRow && rows.length > 1 ? rows[1] : rows[0];
-      if (testRow && testRow.length >= 12 && delimiter === '\t') {
-        // Check if it looks like DC format: col 0 is numeric (Division ID), col 1 has age+level like "11AAA"
-        var col0 = String(testRow[0]).trim();
-        var col1 = String(testRow[1]).trim();
-        if (/^\d+$/.test(col0) && /^\d+\w/.test(col1)) {
-          isDCFormat = true;
-        }
-        // Also detect by header names
-        if (hasHeaderRow && firstRowLower.indexOf('division id') >= 0) {
-          isDCFormat = true;
-        }
-      }
-
       var dataStartRow = hasHeaderRow ? 1 : 0;
-      parsedCoachReportTeams = [];
 
-      if (isDCFormat) {
-        // ─── DC Event Contact Report: fixed column positions ───
-        // Debug: log first data row column mapping
-        var debugRow = rows[dataStartRow];
-        if (debugRow) {
-          console.log('🔍 DC Parser Debug — Row has ' + debugRow.length + ' columns (hasHeader=' + hasHeaderRow + ', dataStartRow=' + dataStartRow + '):');
-          for (var di = 0; di < debugRow.length; di++) {
-            console.log('  [' + di + '] = "' + String(debugRow[di] || '').trim() + '"');
-          }
-        }
+      // DC Event Contact Report: 13 tab-separated columns
+      // [0] Division ID | [1] Division Identifier | [2] Division Class | [3] City | [4] State | [5] Team Class | [6] Date of Entry | [7] Team Name | [8] First | [9] Last | [10] Email | [11] Phone | [12] Phone 2
+      var csvRows = [];
+      csvRows.push('Team Name,Class,Manager First Name,Manager Last Name,Manager Email,Manager Phone,Team City,Team State');
 
-        for (var r = dataStartRow; r < rows.length; r++) {
-          var row = rows[r];
-          var teamName = String(row[7] || '').trim();
-          if (!teamName) continue;
+      var count = 0;
+      for (var r = dataStartRow; r < rows.length; r++) {
+        var row = rows[r];
+        var teamName = String(row[7] || '').trim();
+        if (!teamName) continue;
 
-          // Column 1 = Division Identifier — use as-is for age_group (e.g. "11AAA", "13Op")
-          var ageGroup = String(row[1] || '').trim();
-          var firstName = String(row[8] || '').trim();
-          var lastName = String(row[9] || '').trim();
+        // Age group: Column 1 (Division Identifier), fall back to Column 2
+        var ageGroup = String(row[1] || '').trim() || String(row[2] || '').trim();
 
-          parsedCoachReportTeams.push({
-            team_name: teamName,
-            age_group: ageGroup,
-            division_class: String(row[2] || '').trim(),
-            city: String(row[3] || '').trim(),
-            state: String(row[4] || '').trim(),
-            team_class: String(row[5] || '').trim(),
-            date_of_entry: String(row[6] || '').trim(),
-            coach_first_name: firstName,
-            coach_last_name: lastName,
-            coach_name: (firstName + ' ' + lastName).trim(),
-            coach_email: String(row[10] || '').trim(),
-            coach_phone: String(row[11] || '').trim(),
-            coach_phone_2: row[12] !== undefined ? String(row[12] || '').trim() : '',
-            dc_division_id: String(row[0] || '').trim(),
-            dc_division_identifier: ageGroup
-          });
-        }
-      } else {
-        // ─── Generic header-based format (CSV/XLSX upload, other pastes) ───
-        if (!hasHeaderRow) {
-          showToast('❌ Could not detect DC format or header row');
-          return;
-        }
-        var header = rows[0];
-        var colMap = {};
-        for (var c = 0; c < header.length; c++) {
-          var h = String(header[c]).toLowerCase().trim();
-          if (h.indexOf('team name') >= 0 || h === 'team') colMap.team_name = c;
-          if (h.indexOf('division') >= 0 || h.indexOf('class') >= 0 || h === 'age' || h === 'age group') colMap.age_group = c;
-          if (h.indexOf('first name') >= 0 || h.indexOf('coach first') >= 0 || h.indexOf('manager first') >= 0) colMap.first_name = c;
-          if (h.indexOf('last name') >= 0 || h.indexOf('coach last') >= 0 || h.indexOf('manager last') >= 0) colMap.last_name = c;
-          if (h === 'name' || h === 'coach name' || h === 'manager name' || h === 'contact name' || h === 'coach') colMap.full_name = c;
-          if ((h.indexOf('phone') >= 0) && colMap.phone === undefined) colMap.phone = c;
-          if (h.indexOf('email') >= 0 || h.indexOf('e-mail') >= 0) colMap.email = c;
-          if (h.indexOf('city') >= 0) colMap.city = c;
-          if (h.indexOf('state') >= 0) colMap.state = c;
-        }
-
-        if (colMap.team_name === undefined) {
-          showToast('❌ Could not find a "Team Name" column in the header row');
-          return;
-        }
-
-        for (var r = 1; r < rows.length; r++) {
-          var row = rows[r];
-          var name = String(row[colMap.team_name] || '').trim();
-          if (!name) continue;
-
-          var coachName = '';
-          var firstName = '', lastName = '';
-          if (colMap.full_name !== undefined) {
-            coachName = String(row[colMap.full_name] || '').trim();
-          } else {
-            firstName = colMap.first_name !== undefined ? String(row[colMap.first_name] || '').trim() : '';
-            lastName = colMap.last_name !== undefined ? String(row[colMap.last_name] || '').trim() : '';
-            coachName = (firstName + ' ' + lastName).trim();
-          }
-
-          parsedCoachReportTeams.push({
-            team_name: name,
-            age_group: colMap.age_group !== undefined ? String(row[colMap.age_group] || '').trim() : '',
-            coach_first_name: firstName,
-            coach_last_name: lastName,
-            coach_name: coachName,
-            coach_phone: colMap.phone !== undefined ? String(row[colMap.phone] || '').trim() : '',
-            coach_email: colMap.email !== undefined ? String(row[colMap.email] || '').trim() : '',
-            city: colMap.city !== undefined ? String(row[colMap.city] || '').trim() : '',
-            state: colMap.state !== undefined ? String(row[colMap.state] || '').trim() : ''
-          });
-        }
+        csvRows.push([
+          csvEscape(teamName),
+          csvEscape(ageGroup),
+          csvEscape(String(row[8] || '').trim()),
+          csvEscape(String(row[9] || '').trim()),
+          csvEscape(String(row[10] || '').trim()),
+          csvEscape(String(row[11] || '').trim()),
+          csvEscape(String(row[3] || '').trim()),
+          csvEscape(String(row[4] || '').trim())
+        ].join(','));
+        count++;
       }
 
-      if (parsedCoachReportTeams.length === 0) {
+      if (count === 0) {
         showToast('No teams found in the pasted data');
         return;
       }
 
-      // Render debug dump of first raw row
-      var debugRow = rows[dataStartRow];
-      var debugHtml = '';
-      if (debugRow && isDCFormat) {
-        debugHtml = '<div style="margin-bottom:8px; padding:8px 10px; background:#fff3cd; border:1px solid #ffc107; border-radius:4px; font-family:\'Space Mono\',monospace; font-size:11px; max-height:120px; overflow-y:auto;">' +
-          '<strong>Debug: First row (' + debugRow.length + ' cols, hasHeader=' + hasHeaderRow + '):</strong><br>';
-        for (var di = 0; di < debugRow.length; di++) {
-          debugHtml += '[' + di + '] = <code>"' + String(debugRow[di] || '').replace(/</g, '&lt;') + '"</code><br>';
-        }
-        debugHtml += '</div>';
-      }
+      // Download CSV
+      var csvContent = csvRows.join('\n');
+      var blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = 'coach-report-teams.csv';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
 
-      // Render preview table
-      var html = debugHtml + '<div style="max-height:300px; overflow-y:auto; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--white);">' +
-        '<table style="width:100%; border-collapse:collapse; font-size:12px;">' +
-        '<thead><tr style="background:var(--navy-light); position:sticky; top:0;">' +
-          '<th style="text-align:left; padding:8px 10px; font-weight:600; border-bottom:1px solid var(--border);">Team Name</th>' +
-          '<th style="text-align:left; padding:8px 10px; font-weight:600; border-bottom:1px solid var(--border);">Age Group</th>' +
-          '<th style="text-align:left; padding:8px 10px; font-weight:600; border-bottom:1px solid var(--border);">Division</th>' +
-          '<th style="text-align:left; padding:8px 10px; font-weight:600; border-bottom:1px solid var(--border);">City/State</th>' +
-          '<th style="text-align:left; padding:8px 10px; font-weight:600; border-bottom:1px solid var(--border);">Coach</th>' +
-          '<th style="text-align:left; padding:8px 10px; font-weight:600; border-bottom:1px solid var(--border);">Phone</th>' +
-          '<th style="text-align:left; padding:8px 10px; font-weight:600; border-bottom:1px solid var(--border);">Email</th>' +
-        '</tr></thead><tbody>';
-      parsedCoachReportTeams.forEach(function(t) {
-        var cityState = [t.city, t.state].filter(function(s) { return s; }).join(', ');
-        html += '<tr style="border-bottom:1px solid var(--border);">' +
-          '<td style="padding:6px 10px;">' + (t.team_name || '') + '</td>' +
-          '<td style="padding:6px 10px;">' + (t.age_group || '') + '</td>' +
-          '<td style="padding:6px 10px;">' + (t.division_class || '') + '</td>' +
-          '<td style="padding:6px 10px;">' + cityState + '</td>' +
-          '<td style="padding:6px 10px;">' + (t.coach_name || '') + '</td>' +
-          '<td style="padding:6px 10px;">' + (t.coach_phone || '') + '</td>' +
-          '<td style="padding:6px 10px;">' + (t.coach_email || '') + '</td>' +
-        '</tr>';
-      });
-      html += '</tbody></table></div>';
-
-      document.getElementById('coachReportPreview').innerHTML = html;
-      document.getElementById('coachReportImportBtn').style.display = 'inline-flex';
-      document.getElementById('coachReportStatus').textContent = parsedCoachReportTeams.length + ' teams detected' + (isDCFormat ? ' (DC format)' : '');
-    }
-
-    async function importCoachReport(eventId) {
-      if (parsedCoachReportTeams.length === 0) { showToast('No parsed teams to import'); return; }
-
-      var btn = document.getElementById('coachReportImportBtn');
-      var parseBtn = document.getElementById('coachReportParseBtn');
-      btn.disabled = true;
-      if (parseBtn) parseBtn.disabled = true;
-      var total = parsedCoachReportTeams.length;
-      btn.textContent = 'Importing... (0/' + total + ')';
-
-      try {
-        pendingRosterTeams = parsedCoachReportTeams;
-        var result = await createTeamsFromRoster(eventId, function(current, tot) {
-          btn.textContent = 'Importing... (' + current + '/' + tot + ')';
-        });
-        showToast('✅ ' + (result.matched + result.created) + ' teams imported (' + result.matched + ' matched existing, ' + result.created + ' newly created)');
-        document.getElementById('coachReportSection').style.display = 'none';
-        parsedCoachReportTeams = [];
-        renderEventTab();
-        loadTeamsDirectory();
-      } catch (err) {
-        showToast('❌ Error: ' + err.message);
-      } finally {
-        btn.disabled = false;
-        btn.textContent = 'Import Teams';
-        if (parseBtn) parseBtn.disabled = false;
-      }
+      document.getElementById('coachReportStatus').textContent = '✅ CSV generated with ' + count + ' teams. Upload it using the "Upload More Teams" button above.';
+      showToast('✅ CSV downloaded with ' + count + ' teams');
     }
 
     async function deleteEventTeam(eventId, teamId, teamName) {
@@ -8024,15 +7863,13 @@ if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save Event'; }
         '</div>' +
         // Coach Report paste section (hidden by default)
         '<div id="coachReportSection" style="display:none; margin-bottom:16px; background:var(--navy-light); border:1px solid var(--border); border-radius:var(--radius); padding:16px;">' +
-          '<label style="display:block; font-size:13px; font-weight:700; margin-bottom:4px; color:var(--text-primary);">📋 Paste Coach Report</label>' +
-          '<p style="font-size:12px; color:var(--text-muted); margin-bottom:12px;">Go to DC → Event Contact Report → Select All (Ctrl+A) → Copy (Ctrl+C) → Paste here</p>' +
-          '<textarea id="coachReportText" rows="8" placeholder="Paste tab-separated or comma-separated coach report data here..." style="width:100%; padding:10px 14px; border:1px solid var(--border); border-radius:var(--radius-sm); font-size:12px; font-family:\'Space Mono\',monospace; line-height:1.5; resize:vertical; margin-bottom:10px;"></textarea>' +
+          '<label style="display:block; font-size:13px; font-weight:700; margin-bottom:4px; color:var(--text-primary);">📋 Paste Coach Report → Generate CSV</label>' +
+          '<p style="font-size:12px; color:var(--text-muted); margin-bottom:12px;">Go to DC → Event Contact Report → Select All (Ctrl+A) → Copy (Ctrl+C) → Paste here → Generate CSV → Upload via "Upload More Teams"</p>' +
+          '<textarea id="coachReportText" rows="8" placeholder="Paste tab-separated DC Event Contact Report data here..." style="width:100%; padding:10px 14px; border:1px solid var(--border); border-radius:var(--radius-sm); font-size:12px; font-family:\'Space Mono\',monospace; line-height:1.5; resize:vertical; margin-bottom:10px;"></textarea>' +
           '<div style="display:flex; gap:8px; align-items:center;">' +
-            '<button class="btn btn-secondary btn-sm" id="coachReportParseBtn" onclick="parseCoachReport()">Parse & Preview</button>' +
-            '<button class="btn btn-primary btn-sm" id="coachReportImportBtn" onclick="importCoachReport(\'' + eventId + '\')" style="display:none;">Import Teams</button>' +
+            '<button class="btn btn-primary btn-sm" id="coachReportGenBtn" onclick="generateCoachReportCSV()">Generate CSV</button>' +
             '<span id="coachReportStatus" style="font-size:12px; color:var(--text-muted);"></span>' +
           '</div>' +
-          '<div id="coachReportPreview" style="margin-top:12px;"></div>' +
         '</div>';
         
         // Group by age

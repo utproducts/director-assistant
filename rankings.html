@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>USSSA Florida Baseball Rankings</title>
+  <title>USSSA Florida Baseball Rankings — 2026 Season</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
@@ -231,7 +231,7 @@
     <div class="header-hero">
       <div>
         <h1 id="pageTitle">USSSA Florida Baseball Rankings</h1>
-        <p id="pageSubtitle">Season stats, leaderboards & team rankings</p>
+        <p id="pageSubtitle">2026 Season — All tournaments combined</p>
       </div>
       <select class="state-select" id="stateFilter" onchange="onStateChange()">
         <option value="FL">Florida</option>
@@ -247,13 +247,7 @@
   <!-- AGE GROUP TABS -->
   <div class="age-tabs-bar">
     <div class="age-tabs" id="ageTabs">
-      <div class="age-tab active" data-age="8U" onclick="setAgeGroup(this, '8U')">8U</div>
-      <div class="age-tab" data-age="9U" onclick="setAgeGroup(this, '9U')">9U</div>
-      <div class="age-tab" data-age="10U" onclick="setAgeGroup(this, '10U')">10U</div>
-      <div class="age-tab" data-age="11U" onclick="setAgeGroup(this, '11U')">11U</div>
-      <div class="age-tab" data-age="12U" onclick="setAgeGroup(this, '12U')">12U</div>
-      <div class="age-tab" data-age="13U" onclick="setAgeGroup(this, '13U')">13U</div>
-      <div class="age-tab" data-age="14U" onclick="setAgeGroup(this, '14U')">14U</div>
+      <div class="loading" style="padding:14px 20px; font-size:13px;">Loading age groups...</div>
     </div>
   </div>
 
@@ -280,10 +274,6 @@
           </div>
         </div>
         <div class="filter-row">
-          <label>Event:</label>
-          <select class="event-filter" id="eventFilter" onchange="loadLeaderboards()">
-            <option value="">All Events</option>
-          </select>
           <label id="minLabel">Min AB:</label>
           <input class="filter-input" type="number" id="minAB" value="5" min="1" onchange="loadLeaderboards()">
         </div>
@@ -345,11 +335,6 @@
       <div class="card">
         <div class="card-header">
           <h2>Team Rankings</h2>
-          <div>
-            <select class="event-filter" id="standingsEventFilter" onchange="loadStandings()">
-              <option value="">All Events</option>
-            </select>
-          </div>
         </div>
         <div class="table-wrap">
           <table>
@@ -376,11 +361,6 @@
       <div class="card">
         <div class="card-header">
           <h2>Recent Games</h2>
-          <div>
-            <select class="event-filter" id="gamesEventFilter" onchange="loadGames()">
-              <option value="">All Events</option>
-            </select>
-          </div>
         </div>
         <div class="games-grid" id="gamesGrid">
         </div>
@@ -402,10 +382,9 @@
     const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
     // ===== STATE =====
-    let currentAge = '8U';
+    let currentAge = null; // set dynamically from DB
     let currentMainTab = 'leaderboards';
     let currentStatTab = 'batting';
-    let allEvents = [];
     let battingSortKey = 'avg';
     let battingSortDir = -1;
     let pitchingSortKey = 'era';
@@ -463,18 +442,27 @@
       el.innerHTML = '<div class="empty-state"><p>' + msg + '</p></div>';
     }
 
-    // ===== LOAD EVENTS FOR FILTERS =====
-    async function loadEvents() {
+    // ===== LOAD AGE GROUPS FROM DB =====
+    async function loadAgeGroups() {
       try {
-        const { data } = await sb.from('ec_events').select('id, name, event_name, start_date').order('start_date', { ascending: false });
-        allEvents = data || [];
-        const opts = '<option value="">All Events</option>' + allEvents.map(e =>
-          '<option value="' + (e.event_name || e.name) + '">' + (e.event_name || e.name) + (e.start_date ? ' (' + e.start_date + ')' : '') + '</option>'
+        const { data } = await sb.from('ec_games').select('age_group').neq('age_group', null);
+        const unique = [...new Set((data || []).map(r => r.age_group).filter(Boolean))];
+        // Sort numerically: "8U" < "9U" < "10U" < "11U"
+        unique.sort((a, b) => parseInt(a) - parseInt(b));
+
+        if (unique.length === 0) {
+          document.getElementById('ageTabs').innerHTML = '<div style="padding:14px 20px; font-size:13px; color:var(--text-muted);">No data yet</div>';
+          return;
+        }
+
+        currentAge = unique[0];
+        document.getElementById('ageTabs').innerHTML = unique.map((age, i) =>
+          '<div class="age-tab' + (i === 0 ? ' active' : '') + '" data-age="' + age + '" onclick="setAgeGroup(this, \'' + age + '\')">' + age + '</div>'
         ).join('');
-        document.getElementById('eventFilter').innerHTML = opts;
-        document.getElementById('standingsEventFilter').innerHTML = opts;
-        document.getElementById('gamesEventFilter').innerHTML = opts;
-      } catch (e) { console.error('Load events error:', e); }
+      } catch (e) {
+        console.error('Load age groups error:', e);
+        document.getElementById('ageTabs').innerHTML = '<div style="padding:14px 20px; font-size:13px; color:var(--text-muted);">Error loading age groups</div>';
+      }
     }
 
     // ===== LEADERBOARDS =====
@@ -485,13 +473,11 @@
       showLoading(pitchingBody);
 
       try {
-        const eventName = document.getElementById('eventFilter').value;
         const minVal = parseInt(document.getElementById('minAB').value) || (currentStatTab === 'batting' ? 5 : 3);
 
-        // Get games filtered by age group and event
-        let gamesQuery = sb.from('ec_games').select('id, age_group, event_name');
+        // Get all games for this age group (across all events)
+        let gamesQuery = sb.from('ec_games').select('id');
         if (currentAge) gamesQuery = gamesQuery.eq('age_group', currentAge);
-        if (eventName) gamesQuery = gamesQuery.eq('event_name', eventName);
         const { data: games } = await gamesQuery;
         const gameIds = (games || []).map(g => g.id);
 
@@ -635,13 +621,10 @@
       showLoading(body);
 
       try {
-        const eventName = document.getElementById('standingsEventFilter').value;
-
         let query = sb.from('ec_games')
-          .select('home_score, away_score, home_team_id, away_team_id, age_group, event_name')
+          .select('home_score, away_score, home_team_id, away_team_id')
           .eq('status', 'final');
         if (currentAge) query = query.eq('age_group', currentAge);
-        if (eventName) query = query.eq('event_name', eventName);
         const { data: games } = await query;
 
         if (!games || games.length === 0) {
@@ -708,14 +691,11 @@
       grid.innerHTML = '<div class="loading" style="grid-column:1/-1;"><div class="spinner"></div> Loading...</div>';
 
       try {
-        const eventName = document.getElementById('gamesEventFilter').value;
-
         let query = sb.from('ec_games')
           .select('*, home_team:ec_teams!home_team_id(team_name), away_team:ec_teams!away_team_id(team_name)')
           .order('game_date', { ascending: false })
           .limit(50);
         if (currentAge) query = query.eq('age_group', currentAge);
-        if (eventName) query = query.eq('event_name', eventName);
         const { data: games } = await query;
 
         if (!games || games.length === 0) {
@@ -798,8 +778,8 @@
 
     // ===== INIT =====
     async function init() {
-      await loadEvents();
-      loadLeaderboards();
+      await loadAgeGroups();
+      refreshCurrentTab();
     }
     init();
   </script>
