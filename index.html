@@ -7260,11 +7260,13 @@ async function saveBcastTemplate() {
           skippedLinks++;
           console.log('⏭️ Team already linked to event, skipping: ' + t.team_name);
         } else {
-          await sb.from('ec_event_teams').insert({
+          var linkObj = {
             event_id: eventId,
             team_id: teamId,
             age_group: t.age_group
-          });
+          };
+          if (t.dc_division_id) linkObj.dc_division_id = t.dc_division_id;
+          await sb.from('ec_event_teams').insert(linkObj);
         }
       }
 
