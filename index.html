@@ -7231,6 +7231,7 @@ async function saveBcastTemplate() {
 
         // ─── CREATE new team if no exact match ───
         if (!teamId) {
+          // Core insert with only guaranteed columns
           var insertObj = {
             team_name: t.team_name,
             coach_name: t.coach_name || ((t.coach_first_name || '') + ' ' + (t.coach_last_name || '')).trim(),
@@ -7241,20 +7242,26 @@ async function saveBcastTemplate() {
             event_id: eventId,
             active: true
           };
-          // DC Event Contact Report extended fields
-          if (t.coach_first_name) insertObj.coach_first_name = t.coach_first_name;
-          if (t.coach_last_name) insertObj.coach_last_name = t.coach_last_name;
-          if (t.coach_phone_2) insertObj.coach_phone_2 = t.coach_phone_2;
-          if (t.city) insertObj.team_city = t.city;
-          if (t.state) insertObj.team_state = t.state;
-          if (t.team_class) insertObj.team_class = t.team_class;
-          if (t.division_class) insertObj.division_class = t.division_class;
-          if (t.date_of_entry) insertObj.date_of_entry = t.date_of_entry;
-          if (t.dc_division_id) insertObj.dc_division_id = t.dc_division_id;
           if (i === 0) console.log('📋 First team insertObj:', JSON.stringify(insertObj));
           var { data: team, error } = await sb.from('ec_teams').insert(insertObj).select('id').single();
 
           if (error) { console.error('❌ Team create error for "' + t.team_name + '":', error.message, error); continue; }
+
+          // Try to save DC extended fields separately (won't break if columns don't exist yet)
+          var extFields = {};
+          if (t.coach_first_name) extFields.coach_first_name = t.coach_first_name;
+          if (t.coach_last_name) extFields.coach_last_name = t.coach_last_name;
+          if (t.coach_phone_2) extFields.coach_phone_2 = t.coach_phone_2;
+          if (t.city) extFields.team_city = t.city;
+          if (t.state) extFields.team_state = t.state;
+          if (t.team_class) extFields.team_class = t.team_class;
+          if (t.division_class) extFields.division_class = t.division_class;
+          if (t.date_of_entry) extFields.date_of_entry = t.date_of_entry;
+          if (t.dc_division_id) extFields.dc_division_id = t.dc_division_id;
+          if (Object.keys(extFields).length > 0) {
+            var { error: extErr } = await sb.from('ec_teams').update(extFields).eq('id', team.id);
+            if (extErr) console.warn('⚠️ Extended fields update skipped for "' + t.team_name + '":', extErr.message);
+          }
           teamId = team.id;
           created++;
         }
