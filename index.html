@@ -7242,10 +7242,11 @@ async function saveBcastTemplate() {
             event_id: eventId,
             active: true
           };
-          if (i === 0) console.log('📋 First team insertObj:', JSON.stringify(insertObj));
-          var { data: team, error } = await sb.from('ec_teams').insert(insertObj).select('id').single();
+          if (i < 3) console.log('📋 Team #' + i + ' "' + t.team_name + '" insertObj.age_group = "' + insertObj.age_group + '" (type: ' + typeof insertObj.age_group + '), t.age_group = "' + t.age_group + '"');
+          var { data: team, error } = await sb.from('ec_teams').insert(insertObj).select('id, age_group, team_name').single();
 
           if (error) { console.error('❌ Team create error for "' + t.team_name + '":', error.message, error); continue; }
+          if (i < 3) console.log('📋 Team #' + i + ' INSERT returned: id=' + team.id + ', age_group="' + team.age_group + '", name="' + team.team_name + '"');
 
           // Try to save DC extended fields separately (won't break if columns don't exist yet)
           var extFields = {};
