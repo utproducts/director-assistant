@@ -300,6 +300,7 @@
     }
 
     @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes hintPulse { 0%,100% { opacity:1; } 50% { opacity:0.5; } }
 
     .scrape-progress {
       width: 100%;
@@ -7466,8 +7467,31 @@ async function saveBcastTemplate() {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
 
-      document.getElementById('coachReportStatus').textContent = '✅ CSV generated with ' + count + ' teams. Upload it using the "Upload More Teams" button above.';
-      showToast('✅ CSV downloaded with ' + count + ' teams');
+      // Collapse paste section
+      document.getElementById('coachReportSection').style.display = 'none';
+
+      // Show green success hint next to Upload More Teams button
+      var hint = document.getElementById('coachReportUploadHint');
+      if (hint) {
+        hint.textContent = '✓ CSV downloaded with ' + count + ' teams — now upload it here';
+        hint.style.display = 'inline-block';
+        setTimeout(function() { hint.style.display = 'none'; }, 12000);
+      }
+
+      // Pulse the Upload More Teams button
+      var uploadBtn = document.querySelector('#detailRosterUpload');
+      if (uploadBtn && uploadBtn.previousElementSibling) {
+        var btn = uploadBtn.previousElementSibling;
+        btn.style.transition = 'box-shadow 0.3s, transform 0.3s';
+        btn.style.boxShadow = '0 0 0 3px rgba(16,185,129,0.5)';
+        btn.style.transform = 'scale(1.05)';
+        setTimeout(function() {
+          btn.style.boxShadow = '';
+          btn.style.transform = '';
+        }, 4000);
+      }
+
+      showToast('✅ CSV downloaded — upload it with "Upload More Teams"');
     }
 
     async function deleteEventTeam(eventId, teamId, teamName) {
@@ -7857,6 +7881,7 @@ if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save Event'; }
         var uploadHtml = '<div style="margin-bottom:16px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">' +
           '<button class="btn btn-secondary btn-sm" onclick="document.getElementById(\'detailRosterUpload\').click()">📤 Upload More Teams</button>' +
           '<input type="file" id="detailRosterUpload" accept=".xlsx,.xls,.csv" style="display:none" onchange="uploadTeamsToExistingEvent(event, \'' + eventId + '\')">' +
+          '<span id="coachReportUploadHint" style="display:none; font-size:12px; font-weight:600; color:#10b981; background:rgba(16,185,129,0.1); padding:4px 10px; border-radius:6px; animation:hintPulse 1.5s ease-in-out 3;">✓ CSV downloaded — now upload it here ↑</span>' +
           '<button class="btn btn-secondary btn-sm" onclick="toggleCoachReportPaste(\'' + eventId + '\')">📋 Paste Coach Report</button>' +
           (isAdmin && withoutGC.length > 0 ? '<button class="btn btn-sm" style="background:var(--blue-bright); color:white; border:none; padding:6px 14px; border-radius:var(--radius-sm); cursor:pointer; font-size:12px; font-weight:600;" onclick="requestGCLinks(\'' + eventId + '\')">📨 Request GC Links from Coaches</button>' : '') +
           (eventTeams.length > 0 ? '<button class="btn btn-sm" style="background:none; border:1px solid var(--border); color:var(--text-muted); padding:6px 14px; border-radius:var(--radius-sm); cursor:pointer; font-size:12px;" onclick="deleteAllEventTeams(\'' + eventId + '\', ' + eventTeams.length + ')">🗑 Delete All Teams</button>' : '') +
