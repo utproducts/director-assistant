@@ -7082,8 +7082,10 @@ async function saveBcastTemplate() {
             for (var c = 0; c < row.length; c++) {
               var val = String(row[c] || '').toLowerCase().trim();
               if (val.indexOf('team name') >= 0 || val === 'team') colMap.team_name = c;
-              if (val.indexOf('division') >= 0 && val.indexOf('class') >= 0) colMap.age_group = c;
-              if (val.indexOf('class') >= 0 && !colMap.age_group) colMap.age_group = c;
+              if (val.indexOf('division identifier') >= 0) colMap.div_identifier = c;
+              if (val.indexOf('division') >= 0 && val.indexOf('class') >= 0) colMap.div_class = c;
+              if ((val === 'class' || val === 'age' || val === 'age group') && !colMap.age_group) colMap.age_group = c;
+              if (val.indexOf('team class') >= 0) colMap.team_class = c;
               if (val.indexOf('manager first') >= 0 || val.indexOf('coach first') >= 0) colMap.first_name = c;
               if (val.indexOf('manager last') >= 0 || val.indexOf('coach last') >= 0) colMap.last_name = c;
               if (val.indexOf('manager email') >= 0 || val.indexOf('email') >= 0) colMap.email = c;
@@ -7093,26 +7095,42 @@ async function saveBcastTemplate() {
             }
             if (colMap.team_name !== undefined) { headerRow = r; break; }
           }
-          
+
           if (headerRow < 0 || colMap.team_name === undefined) {
             showToast('❌ Could not find "Team Name" column');
             return;
           }
-          
+
           // Parse teams
           pendingRosterTeams = [];
           for (var r = headerRow + 1; r < data.length; r++) {
             var row = data[r];
             var name = String(row[colMap.team_name] || '').trim();
             if (!name) continue;
-            
+
             var first = colMap.first_name !== undefined ? String(row[colMap.first_name] || '').trim() : '';
             var last = colMap.last_name !== undefined ? String(row[colMap.last_name] || '').trim() : '';
             var coach = (first + ' ' + last).trim();
-            
+
+            // Age group: prefer Division Identifier parsed via parseDivisionAge, fall back to division class or age_group col
+            var ageGroup = '';
+            if (colMap.div_identifier !== undefined) {
+              ageGroup = parseDivisionAge(String(row[colMap.div_identifier] || '').trim());
+            }
+            if (!ageGroup && colMap.div_class !== undefined) {
+              ageGroup = String(row[colMap.div_class] || '').trim();
+            }
+            if (!ageGroup && colMap.age_group !== undefined) {
+              ageGroup = String(row[colMap.age_group] || '').trim();
+            }
+
             pendingRosterTeams.push({
               team_name: name,
-              age_group: colMap.age_group !== undefined ? String(row[colMap.age_group] || '').trim() : '',
+              age_group: ageGroup,
+              team_class: colMap.team_class !== undefined ? String(row[colMap.team_class] || '').trim() : '',
+              division_class: colMap.div_class !== undefined ? String(row[colMap.div_class] || '').trim() : '',
+              coach_first_name: first,
+              coach_last_name: last,
               coach_name: coach,
               coach_email: colMap.email !== undefined ? String(row[colMap.email] || '').trim() : '',
               coach_phone: colMap.phone !== undefined ? String(row[colMap.phone] || '').trim() : '',
@@ -7157,11 +7175,13 @@ async function saveBcastTemplate() {
       reader.readAsArrayBuffer(file);
     }
     
-    async function createTeamsFromRoster(eventId) {
-      if (pendingRosterTeams.length === 0) return 0;
+    async function createTeamsFromRoster(eventId, onProgress) {
+      if (pendingRosterTeams.length === 0) return { matched: 0, created: 0 };
 
       var created = 0, matched = 0, skippedLinks = 0;
+      var total = pendingRosterTeams.length;
       for (var i = 0; i < pendingRosterTeams.length; i++) {
+        if (onProgress) onProgress(i + 1, total);
         var t = pendingRosterTeams[i];
         var teamId = null;
         var cleanPhone = (t.coach_phone || '').replace(/\D/g, '').slice(-10);
@@ -7250,20 +7270,26 @@ async function saveBcastTemplate() {
 
       console.log('📋 Roster import: ' + matched + ' matched existing, ' + created + ' newly created, ' + skippedLinks + ' duplicate links skipped');
       pendingRosterTeams = [];
-      return matched + created;
+      return { matched: matched, created: created };
     }
     
     function uploadTeamsToExistingEvent(fileEvent, eventId) {
       var file = fileEvent.target.files[0];
       if (!file) return;
-      
+
+      // Find and disable the upload button
+      var uploadBtns = document.querySelectorAll('#eventDetailContent button');
+      var uploadBtn = null;
+      uploadBtns.forEach(function(b) { if (b.textContent.indexOf('Upload More Teams') >= 0) uploadBtn = b; });
+      if (uploadBtn) { uploadBtn.disabled = true; uploadBtn.textContent = 'Uploading...'; }
+
       var reader = new FileReader();
       reader.onload = async function(e) {
         try {
           var wb = XLSX.read(e.target.result, { type: 'array' });
           var ws = wb.Sheets[wb.SheetNames[0]];
           var data = XLSX.utils.sheet_to_json(ws, { header: 1 });
-          
+
           // Reuse column detection
           var headerRow = -1;
           var colMap = {};
@@ -7272,8 +7298,10 @@ async function saveBcastTemplate() {
             for (var c = 0; c < row.length; c++) {
               var val = String(row[c] || '').toLowerCase().trim();
               if (val.indexOf('team name') >= 0 || val === 'team') colMap.team_name = c;
-              if (val.indexOf('division') >= 0 && val.indexOf('class') >= 0) colMap.age_group = c;
-              if (val.indexOf('class') >= 0 && !colMap.age_group) colMap.age_group = c;
+              if (val.indexOf('division identifier') >= 0) colMap.div_identifier = c;
+              if (val.indexOf('division') >= 0 && val.indexOf('class') >= 0) colMap.div_class = c;
+              if ((val === 'class' || val === 'age' || val === 'age group') && !colMap.age_group) colMap.age_group = c;
+              if (val.indexOf('team class') >= 0) colMap.team_class = c;
               if (val.indexOf('manager first') >= 0 || val.indexOf('coach first') >= 0) colMap.first_name = c;
               if (val.indexOf('manager last') >= 0 || val.indexOf('coach last') >= 0) colMap.last_name = c;
               if (val.indexOf('manager email') >= 0 || val.indexOf('email') >= 0) colMap.email = c;
@@ -7283,9 +7311,9 @@ async function saveBcastTemplate() {
             }
             if (colMap.team_name !== undefined) { headerRow = r; break; }
           }
-          
+
           if (headerRow < 0) { showToast('❌ Could not find Team Name column'); return; }
-          
+
           pendingRosterTeams = [];
           for (var r = headerRow + 1; r < data.length; r++) {
             var row = data[r];
@@ -7293,9 +7321,25 @@ async function saveBcastTemplate() {
             if (!name) continue;
             var first = colMap.first_name !== undefined ? String(row[colMap.first_name] || '').trim() : '';
             var last = colMap.last_name !== undefined ? String(row[colMap.last_name] || '').trim() : '';
+
+            var ageGroup = '';
+            if (colMap.div_identifier !== undefined) {
+              ageGroup = parseDivisionAge(String(row[colMap.div_identifier] || '').trim());
+            }
+            if (!ageGroup && colMap.div_class !== undefined) {
+              ageGroup = String(row[colMap.div_class] || '').trim();
+            }
+            if (!ageGroup && colMap.age_group !== undefined) {
+              ageGroup = String(row[colMap.age_group] || '').trim();
+            }
+
             pendingRosterTeams.push({
               team_name: name,
-              age_group: colMap.age_group !== undefined ? String(row[colMap.age_group] || '').trim() : '',
+              age_group: ageGroup,
+              team_class: colMap.team_class !== undefined ? String(row[colMap.team_class] || '').trim() : '',
+              division_class: colMap.div_class !== undefined ? String(row[colMap.div_class] || '').trim() : '',
+              coach_first_name: first,
+              coach_last_name: last,
               coach_name: (first + ' ' + last).trim(),
               coach_email: colMap.email !== undefined ? String(row[colMap.email] || '').trim() : '',
               coach_phone: colMap.phone !== undefined ? String(row[colMap.phone] || '').trim() : '',
@@ -7303,14 +7347,21 @@ async function saveBcastTemplate() {
               state: colMap.state !== undefined ? String(row[colMap.state] || '').trim() : ''
             });
           }
-          
-          var count = await createTeamsFromRoster(eventId);
-          showToast('✅ ' + count + ' teams added to event');
-          renderEventTab(); // Refresh the teams tab
-          loadTeamsDirectory(); // Refresh global teams
-          
+
+          var total = pendingRosterTeams.length;
+          if (uploadBtn) uploadBtn.textContent = 'Importing... (0/' + total + ')';
+          var result = await createTeamsFromRoster(eventId, function(current, tot) {
+            if (uploadBtn) uploadBtn.textContent = 'Importing... (' + current + '/' + tot + ')';
+          });
+          showToast('✅ ' + (result.matched + result.created) + ' teams added (' + result.matched + ' matched, ' + result.created + ' new)');
+          renderEventTab();
+          loadTeamsDirectory();
+
         } catch(err) {
           showToast('❌ Error: ' + err.message);
+        } finally {
+          if (uploadBtn) { uploadBtn.disabled = false; uploadBtn.textContent = '📤 Upload More Teams'; }
+          document.getElementById('detailRosterUpload').value = '';
         }
       };
       reader.readAsArrayBuffer(file);
@@ -7332,12 +7383,12 @@ async function saveBcastTemplate() {
       }
     }
 
-    // Parse Division Identifier (e.g. "211AA" → "11AA", "312AAA" → "12AAA", "413Op" → "13Op")
-    // Format: first digit = region prefix (ignore), next 2 digits = age, rest = level (AA/AAA/Op/Maj/A)
+    // Parse Division Identifier: strip first digit (region prefix), rest is age+level
+    // "211AA" → "11AA", "312AAA" → "12AAA", "413Op" → "13Op", "29Op" → "9Op"
     function parseDivisionAge(divId) {
       if (!divId) return '';
-      var m = String(divId).match(/^\d(\d{2})(.+)$/);
-      return m ? m[1] + m[2] : '';
+      var m = String(divId).match(/^\d(\d+\w+)$/);
+      return m ? m[1] : '';
     }
 
     function parseCoachReport() {
@@ -7513,13 +7564,18 @@ async function saveBcastTemplate() {
       if (parsedCoachReportTeams.length === 0) { showToast('No parsed teams to import'); return; }
 
       var btn = document.getElementById('coachReportImportBtn');
+      var parseBtn = document.getElementById('coachReportParseBtn');
       btn.disabled = true;
-      btn.textContent = 'Importing...';
+      if (parseBtn) parseBtn.disabled = true;
+      var total = parsedCoachReportTeams.length;
+      btn.textContent = 'Importing... (0/' + total + ')';
 
       try {
         pendingRosterTeams = parsedCoachReportTeams;
-        var count = await createTeamsFromRoster(eventId);
-        showToast('✅ ' + count + ' teams imported from coach report');
+        var result = await createTeamsFromRoster(eventId, function(current, tot) {
+          btn.textContent = 'Importing... (' + current + '/' + tot + ')';
+        });
+        showToast('✅ ' + (result.matched + result.created) + ' teams imported (' + result.matched + ' matched existing, ' + result.created + ' newly created)');
         document.getElementById('coachReportSection').style.display = 'none';
         parsedCoachReportTeams = [];
         renderEventTab();
@@ -7529,6 +7585,7 @@ async function saveBcastTemplate() {
       } finally {
         btn.disabled = false;
         btn.textContent = 'Import Teams';
+        if (parseBtn) parseBtn.disabled = false;
       }
     }
 
@@ -7707,7 +7764,8 @@ alert('Please fill in event name, start date, and end date.');
       // Create teams from uploaded roster
       var teamsCreated = 0;
       if (pendingRosterTeams.length > 0) {
-        teamsCreated = await createTeamsFromRoster(eventId);
+        var rosterResult = await createTeamsFromRoster(eventId);
+        teamsCreated = rosterResult.matched + rosterResult.created;
         // Update event game count placeholder
         await sb.from('ec_events').update({ 
           game_count: 0,
