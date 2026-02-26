@@ -4007,11 +4007,11 @@ This is a one-time submission — your link will be used for all events this sea
         (currentLink ? 'Current: ' + currentLink + '\n\nLeave blank and click OK to remove.' : 'Leave blank to cancel.'),
         currentLink || ''
       );
-      
+
       if (input === null) return; // cancelled
-      
+
       input = input.trim();
-      
+
       // Extract gc_team_id from URL if full URL pasted
       var gcTeamId = '';
       var gcLink = input;
@@ -4021,7 +4021,6 @@ This is a one-time submission — your link will be used for all events this sea
           gcTeamId = match[1];
           gcLink = 'https://web.gc.com/teams/' + gcTeamId;
         } else if (input.match(/^[A-Za-z0-9]{8,}$/)) {
-          // Just pasted the team ID directly
           gcTeamId = input;
           gcLink = 'https://web.gc.com/teams/' + gcTeamId;
         } else {
@@ -4029,31 +4028,58 @@ This is a one-time submission — your link will be used for all events this sea
           return;
         }
       }
-      
+
+      // Check if another team already has this gc_team_id
+      if (gcTeamId) {
+        var { data: existing } = await sb.from('ec_teams')
+          .select('id, team_name, age_group')
+          .eq('gc_team_id', gcTeamId);
+
+        var conflict = (existing || []).find(function(t) { return t.id !== teamId; });
+        if (conflict) {
+          var reassign = confirm(
+            'This GC link is already assigned to:\n\n' +
+            '   "' + conflict.team_name + '" (' + (conflict.age_group || 'no age group') + ')\n\n' +
+            'Do you want to reassign it to this team instead?\n\n' +
+            'OK = Reassign (removes from "' + conflict.team_name + '")\n' +
+            'Cancel = Keep current assignment'
+          );
+          if (!reassign) return;
+
+          // Clear GC link from the other team
+          await sb.from('ec_teams').update({
+            gc_team_id: null, gc_team_link: null
+          }).eq('id', conflict.id);
+        }
+      }
+
       // Update ec_teams record
       var { error } = await sb.from('ec_teams').update({
         gc_team_id: gcTeamId || null,
         gc_team_link: gcLink || null
       }).eq('id', teamId);
-      
+
       // If gc_team_link column doesn't exist, try just gc_team_id
       if (error && error.message && error.message.includes('gc_team_link')) {
         var { error: err2 } = await sb.from('ec_teams').update({
           gc_team_id: gcTeamId || null
         }).eq('id', teamId);
         if (err2) {
-          console.error('Error updating GC link:', err2);
           showToast('❌ Error saving: ' + err2.message);
           return;
         }
       } else if (error) {
-        console.error('Error updating GC link:', error);
-        showToast('❌ Error saving: ' + error.message);
+        // Handle unique constraint violation
+        if (error.code === '23505' || (error.message && error.message.indexOf('unique') >= 0) || (error.message && error.message.indexOf('duplicate') >= 0)) {
+          showToast('❌ This GC link is already in use by another team. Try again to reassign it.');
+        } else {
+          showToast('❌ Error saving: ' + error.message);
+        }
         return;
       }
-      
+
       showToast(gcLink ? '✅ GC link saved!' : '✅ GC link removed');
-      
+
       // Reload the current view
       if (typeof currentEventDetail !== 'undefined' && currentEventDetail && currentEventDetail.event) {
         showEventDetail(currentEventDetail.event.id);
