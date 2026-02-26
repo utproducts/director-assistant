@@ -6972,45 +6972,54 @@ async function saveBcastTemplate() {
         container.innerHTML = '<div style="padding:40px; text-align:center; color:var(--text-muted);">No events yet. Click "New Event" to get started!</div>';
         return;
       }
-      
+
+      // Fetch team counts + GC link status per event in one query
+      const eventIds = events.map(e => e.id);
+      const { data: allEventTeams } = await sb.from('ec_event_teams')
+        .select('event_id, team:ec_teams!team_id(gc_team_id)')
+        .in('event_id', eventIds);
+      var teamCountsByEvent = {};
+      (allEventTeams || []).forEach(function(et) {
+        if (!teamCountsByEvent[et.event_id]) teamCountsByEvent[et.event_id] = { total: 0, linked: 0 };
+        teamCountsByEvent[et.event_id].total++;
+        if (et.team && et.team.gc_team_id) teamCountsByEvent[et.event_id].linked++;
+      });
+
       container.innerHTML = events.map(e => {
-        const games = e.game_count || 0;
-        const amount = games * EC_PRICE_PER_GAME;
         const statusColors = {
           setup: 'var(--warning)',
-          active: 'var(--success)', 
+          active: 'var(--success)',
           scraping: '#3b82f6',
           complete: 'var(--text-muted)',
           archived: '#6b7280'
         };
-        const invoiceColors = {
-          pending: 'var(--warning)',
-          sent: '#3b82f6',
-          paid: 'var(--success)'
-        };
         const statusColor = statusColors[e.status] || 'var(--text-muted)';
-        const invoiceColor = invoiceColors[e.invoice_status] || 'var(--warning)';
-        const slug = e.slug || e.event_code || '';
-        const publicUrl = 'https://unrivaled-connect-backend.onrender.com/ec/?event=' + encodeURIComponent(e.name || e.event_name || '');
-        
+        const counts = teamCountsByEvent[e.id] || { total: 0, linked: 0 };
+        const missing = counts.total - counts.linked;
+        const allLinked = counts.total > 0 && missing === 0;
+
         return '<div style="padding:16px 20px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; cursor:pointer;" onclick="showEventDetail(\'' + e.id + '\')">' +
           '<div style="flex:1; min-width:200px;">' +
             '<div style="font-size:15px; font-weight:600;">' + (e.name || e.event_name || 'Untitled') + '</div>' +
-            '<div style="font-size:12px; color:var(--text-muted); margin-top:2px;">' + 
-              (e.start_date || '') + ' to ' + (e.end_date || '') + 
+            '<div style="font-size:12px; color:var(--text-muted); margin-top:2px;">' +
+              (e.start_date || '') + ' to ' + (e.end_date || '') +
               (e.venue ? ' • ' + e.venue : '') +
               (e.age_groups?.length ? ' • ' + e.age_groups.join(', ') : '') +
             '</div>' +
             (e.director_name ? '<div style="font-size:12px; color:var(--text-muted);">Director: ' + e.director_name + '</div>' : '') +
           '</div>' +
           '<div style="display:flex; gap:16px; align-items:center; flex-wrap:wrap;">' +
-            '<div style="text-align:center; min-width:60px;">' +
-              '<div style="font-size:18px; font-weight:700;">' + games + '</div>' +
-              '<div style="font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px;">Games</div>' +
+            '<div style="text-align:center; min-width:55px;">' +
+              '<div style="font-size:18px; font-weight:700;">' + counts.total + '</div>' +
+              '<div style="font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px;">Teams</div>' +
             '</div>' +
-            '<div style="text-align:center; min-width:60px;">' +
-              '<div style="font-size:18px; font-weight:700;">$' + amount + '</div>' +
-              '<div style="font-size:10px; color:' + invoiceColor + '; text-transform:uppercase; letter-spacing:0.5px;">' + (e.invoice_status || 'pending') + '</div>' +
+            '<div style="text-align:center; min-width:55px;">' +
+              '<div style="font-size:18px; font-weight:700; color:' + (allLinked ? 'var(--success)' : 'var(--text-primary)') + ';">' + counts.linked + '</div>' +
+              '<div style="font-size:10px; color:var(--success); text-transform:uppercase; letter-spacing:0.5px;">GC Linked</div>' +
+            '</div>' +
+            '<div style="text-align:center; min-width:55px;">' +
+              '<div style="font-size:18px; font-weight:700; color:' + (missing > 0 ? 'var(--danger)' : 'var(--success)') + ';">' + missing + '</div>' +
+              '<div style="font-size:10px; color:' + (missing > 0 ? 'var(--danger)' : 'var(--success)') + '; text-transform:uppercase; letter-spacing:0.5px;">Missing GC</div>' +
             '</div>' +
             '<span style="padding:4px 10px; border-radius:12px; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; color:' + statusColor + '; background:' + statusColor + '15;">' + (e.status || 'setup') + '</span>' +
             '<button onclick="event.stopPropagation(); deleteEventConfirm(\'' + e.id + '\')" style="background:none; border:1px solid var(--border); border-radius:var(--radius-sm); padding:4px 8px; cursor:pointer; color:var(--text-muted); font-size:12px;" title="Delete event">🗑</button>' +
