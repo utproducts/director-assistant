@@ -2317,6 +2317,7 @@
             <button class="btn" onclick="switchEventTab('embed')" id="evtTab-embed" style="background:none; border:none; border-bottom:2px solid transparent; color:var(--text-muted); padding:12px 16px; font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap;">📋 Embed & Share</button>
             <button class="btn" onclick="switchEventTab('games')" id="evtTab-games" style="background:none; border:none; border-bottom:2px solid transparent; color:var(--text-muted); padding:12px 16px; font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap;">🎮 Games & Stats</button>
             <button class="btn" onclick="switchEventTab('teams')" id="evtTab-teams" style="background:none; border:none; border-bottom:2px solid transparent; color:var(--text-muted); padding:12px 16px; font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap;">👥 Teams & GC Links</button>
+            <button class="btn" onclick="switchEventTab('recap')" id="evtTab-recap" style="background:none; border:none; border-bottom:2px solid transparent; color:var(--text-muted); padding:12px 16px; font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap;">📊 Event Recap</button>
             <button class="btn" onclick="switchEventTab('billing')" id="evtTab-billing" style="background:none; border:none; border-bottom:2px solid transparent; color:var(--text-muted); padding:12px 16px; font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap;">💰 Billing</button>
           </div>
           <div id="eventDetailContent" style="padding:24px;"></div>
@@ -7975,6 +7976,25 @@ if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save Event'; }
         
         content.innerHTML = statsHtml + uploadHtml + teamsHtml;
       
+      // ─── EVENT RECAP TAB ──────────────────────────
+      } else if (currentEventTab === 'recap') {
+        // Build age group options from event teams
+        var recapAgeGroups = {};
+        (teams || []).forEach(function(t) { var ag = t.age_group || (t.team && t.team.age_group); if (ag) recapAgeGroups[ag] = true; });
+        var recapAges = Object.keys(recapAgeGroups).sort();
+        var recapOptions = recapAges.map(function(ag) { return '<option value="' + ag + '">' + ag + '</option>'; }).join('');
+
+        content.innerHTML =
+          '<div style="display:flex; align-items:center; gap:12px; margin-bottom:20px; flex-wrap:wrap;">' +
+            '<h4 style="font-size:16px; font-weight:600; margin:0;">Event Recap</h4>' +
+            '<select id="recapAgeSelect" style="background:var(--navy-light); color:var(--text-primary); border:1px solid var(--border); border-radius:6px; padding:8px 12px; font-size:13px; cursor:pointer;">' +
+              '<option value="">Select Division...</option>' +
+              recapOptions +
+            '</select>' +
+            '<button onclick="generateRecap()" style="background:var(--red); color:#fff; border:none; border-radius:6px; padding:8px 18px; font-size:13px; font-weight:600; cursor:pointer;">Generate Recap</button>' +
+          '</div>' +
+          '<div id="recapContent" style="color:var(--text-muted); font-size:13px;">Select a division and click Generate Recap to create an AI-powered tournament summary with standings, stat leaders, and players of the game.</div>';
+
       // ─── BILLING TAB ─────────────────────────────
       } else if (currentEventTab === 'billing') {
         var billingStats = '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(160px, 1fr)); gap:12px; margin-bottom:20px;">' +
@@ -8186,7 +8206,160 @@ if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save Event'; }
       
       content.innerHTML = html;
     }
-    
+
+    // ═══════════════════════════════════════════════════════
+    // RECAP EMAIL HELPERS
+    // ═══════════════════════════════════════════════════════
+    function buildRecapStandingsTable(standings) {
+      if (!standings || !standings.length) return '';
+      var rows = standings.map(function(t, i) {
+        var bg = i === 0 ? 'background:rgba(255,215,0,0.08);' : '';
+        var accent = i === 0 ? 'border-left:3px solid gold;' : 'border-left:3px solid transparent;';
+        return '<tr style="' + bg + accent + '"><td style="padding:6px 10px;border-bottom:1px solid var(--border);font-weight:' + (i === 0 ? '700' : '400') + ';">' + t.team + '</td><td style="padding:6px 10px;border-bottom:1px solid var(--border);text-align:center;">' + t.w + '</td><td style="padding:6px 10px;border-bottom:1px solid var(--border);text-align:center;">' + t.l + '</td><td style="padding:6px 10px;border-bottom:1px solid var(--border);text-align:center;">' + t.rs + '</td><td style="padding:6px 10px;border-bottom:1px solid var(--border);text-align:center;">' + t.ra + '</td><td style="padding:6px 10px;border-bottom:1px solid var(--border);text-align:center;">' + t.diff + '</td></tr>';
+      }).join('');
+      return '<h3 style="font-size:14px;font-weight:700;margin:20px 0 8px;">Standings</h3><table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr style="background:var(--navy-light);"><th style="padding:6px 10px;text-align:left;border-bottom:2px solid var(--border);">Team</th><th style="padding:6px 10px;text-align:center;border-bottom:2px solid var(--border);">W</th><th style="padding:6px 10px;text-align:center;border-bottom:2px solid var(--border);">L</th><th style="padding:6px 10px;text-align:center;border-bottom:2px solid var(--border);">RS</th><th style="padding:6px 10px;text-align:center;border-bottom:2px solid var(--border);">RA</th><th style="padding:6px 10px;text-align:center;border-bottom:2px solid var(--border);">+/-</th></tr></thead><tbody>' + rows + '</tbody></table>';
+    }
+
+    function buildRecapBattingTable(leaders) {
+      if (!leaders || !leaders.length) return '';
+      var rows = leaders.slice(0, 5).map(function(b) {
+        return '<tr><td style="padding:6px 10px;border-bottom:1px solid var(--border);">' + b.name + '</td><td style="padding:6px 10px;border-bottom:1px solid var(--border);">' + b.team + '</td><td style="padding:6px 10px;border-bottom:1px solid var(--border);text-align:center;font-weight:600;">' + b.avg + '</td><td style="padding:6px 10px;border-bottom:1px solid var(--border);text-align:center;">' + b.h + '-' + b.ab + '</td><td style="padding:6px 10px;border-bottom:1px solid var(--border);text-align:center;">' + b.rbi + '</td></tr>';
+      }).join('');
+      return '<h3 style="font-size:14px;font-weight:700;margin:20px 0 8px;">Top Hitters</h3><table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr style="background:var(--navy-light);"><th style="padding:6px 10px;text-align:left;border-bottom:2px solid var(--border);">Name</th><th style="padding:6px 10px;text-align:left;border-bottom:2px solid var(--border);">Team</th><th style="padding:6px 10px;text-align:center;border-bottom:2px solid var(--border);">AVG</th><th style="padding:6px 10px;text-align:center;border-bottom:2px solid var(--border);">H-AB</th><th style="padding:6px 10px;text-align:center;border-bottom:2px solid var(--border);">RBI</th></tr></thead><tbody>' + rows + '</tbody></table>';
+    }
+
+    function buildRecapPitchingTable(leaders) {
+      if (!leaders || !leaders.length) return '';
+      var rows = leaders.slice(0, 3).map(function(p) {
+        return '<tr><td style="padding:6px 10px;border-bottom:1px solid var(--border);">' + p.name + '</td><td style="padding:6px 10px;border-bottom:1px solid var(--border);">' + p.team + '</td><td style="padding:6px 10px;border-bottom:1px solid var(--border);text-align:center;font-weight:600;">' + p.era + '</td><td style="padding:6px 10px;border-bottom:1px solid var(--border);text-align:center;">' + p.ip + '</td><td style="padding:6px 10px;border-bottom:1px solid var(--border);text-align:center;">' + p.so + '</td></tr>';
+      }).join('');
+      return '<h3 style="font-size:14px;font-weight:700;margin:20px 0 8px;">Top Pitchers</h3><table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr style="background:var(--navy-light);"><th style="padding:6px 10px;text-align:left;border-bottom:2px solid var(--border);">Name</th><th style="padding:6px 10px;text-align:left;border-bottom:2px solid var(--border);">Team</th><th style="padding:6px 10px;text-align:center;border-bottom:2px solid var(--border);">ERA</th><th style="padding:6px 10px;text-align:center;border-bottom:2px solid var(--border);">IP</th><th style="padding:6px 10px;text-align:center;border-bottom:2px solid var(--border);">K</th></tr></thead><tbody>' + rows + '</tbody></table>';
+    }
+
+    function buildRecapPotgSection(potgList) {
+      if (!potgList || !potgList.length) return '';
+      var rows = potgList.slice(0, 3).map(function(p) {
+        return '<tr><td style="padding:6px 10px;border-bottom:1px solid var(--border);font-weight:600;">' + p.name + '</td><td style="padding:6px 10px;border-bottom:1px solid var(--border);">' + p.team + '</td><td style="padding:6px 10px;border-bottom:1px solid var(--border);">' + (p.highlights || '') + '</td></tr>';
+      }).join('');
+      return '<h3 style="font-size:14px;font-weight:700;margin:20px 0 8px;">Players of the Game</h3><table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr style="background:var(--navy-light);"><th style="padding:6px 10px;text-align:left;border-bottom:2px solid var(--border);">Name</th><th style="padding:6px 10px;text-align:left;border-bottom:2px solid var(--border);">Team</th><th style="padding:6px 10px;text-align:left;border-bottom:2px solid var(--border);">Highlights</th></tr></thead><tbody>' + rows + '</tbody></table>';
+    }
+
+    function buildRecapAllTournamentSection(allTournament) {
+      if (!allTournament || !allTournament.length) return '';
+      var rows = allTournament.slice(0, 5).map(function(p) {
+        return '<tr><td style="padding:6px 10px;border-bottom:1px solid var(--border);font-weight:600;">' + p.name + '</td><td style="padding:6px 10px;border-bottom:1px solid var(--border);">' + p.team + '</td><td style="padding:6px 10px;border-bottom:1px solid var(--border);">' + (p.highlights || '') + '</td></tr>';
+      }).join('');
+      return '<h3 style="font-size:14px;font-weight:700;margin:20px 0 8px;">All-Tournament Team</h3><table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr style="background:var(--navy-light);"><th style="padding:6px 10px;text-align:left;border-bottom:2px solid var(--border);">Name</th><th style="padding:6px 10px;text-align:left;border-bottom:2px solid var(--border);">Team</th><th style="padding:6px 10px;text-align:left;border-bottom:2px solid var(--border);">Highlights</th></tr></thead><tbody>' + rows + '</tbody></table>';
+    }
+
+    async function generateRecap() {
+      var ageGroup = document.getElementById('recapAgeSelect').value;
+      if (!ageGroup) { showToast('Please select a division first'); return; }
+
+      var container = document.getElementById('recapContent');
+      container.innerHTML = '<div style="text-align:center;padding:40px;"><div class="spinner" style="margin:0 auto 16px;"></div><p style="color:var(--text-muted);font-size:14px;">Generating Recap...</p></div>';
+
+      try {
+        var evt = currentEventDetail ? currentEventDetail.event : {};
+        var eventName = evt.name || evt.event_name || '';
+        var venue = evt.venue || '';
+        var startDate = evt.start_date || evt.startDate || '';
+        var endDate = evt.end_date || evt.endDate || '';
+        var eventId = evt.id || '';
+
+        // Fetch all data in parallel
+        var encodedEvent = encodeURIComponent(eventName);
+        var encodedAge = encodeURIComponent(ageGroup);
+        var results = await Promise.all([
+          fetch(API_BASE + '/api/ec/standings?event=' + encodedEvent + '&age_group=' + encodedAge).then(function(r) { return r.json(); }),
+          fetch(API_BASE + '/api/ec/leaderboards?event=' + encodedEvent + '&age_group=' + encodedAge + '&min_ab=3&min_ip=2').then(function(r) { return r.json(); }),
+          fetch(API_BASE + '/api/ec/potg?event=' + encodedEvent + '&age_group=' + encodedAge).then(function(r) { return r.json(); }),
+          fetch(API_BASE + '/api/ec/all-tournament?event=' + encodedEvent + '&age_group=' + encodedAge).then(function(r) { return r.json(); }),
+          eventId ? sb.from('ec_event_teams').select('*, team:ec_teams!team_id(coach_email, team_name)').eq('event_id', eventId).eq('age_group', ageGroup) : Promise.resolve({ data: [] })
+        ]);
+
+        var standings = results[0].standings || [];
+        var batting = results[1].batting || [];
+        var pitching = results[1].pitching || [];
+        var potgData = results[2].potg || [];
+        var allTournament = (results[3].team || []);
+        var teamsData = results[4].data || [];
+        var coachEmails = teamsData.filter(function(t) { return t.team && t.team.coach_email; });
+        var coachCount = coachEmails.length;
+
+        // Generate AI recap
+        var recapRes = await fetch(API_BASE + '/api/ec/generate-recap', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            eventName: eventName,
+            ageGroup: ageGroup,
+            venue: venue,
+            startDate: startDate,
+            endDate: endDate,
+            standings: standings,
+            battingLeaders: batting,
+            pitchingLeaders: pitching,
+            potg: potgData,
+            allTournament: allTournament
+          })
+        });
+        var recapJson = await recapRes.json();
+        if (!recapRes.ok) throw new Error(recapJson.error || 'Failed to generate recap');
+
+        // Build preview
+        var dateStr = '';
+        if (startDate) dateStr = startDate + (endDate && endDate !== startDate ? ' – ' + endDate : '');
+
+        var previewHtml = '<div style="margin-bottom:20px;display:flex;justify-content:space-between;align-items:start;">' +
+          '<div>' +
+            '<h2 style="font-size:20px;font-weight:700;margin:0 0 4px;">' + eventName + ' — ' + ageGroup + '</h2>' +
+            (venue ? '<p style="font-size:13px;color:var(--text-muted);margin:0;">' + venue + '</p>' : '') +
+            (dateStr ? '<p style="font-size:13px;color:var(--text-muted);margin:2px 0 0;">' + dateStr + '</p>' : '') +
+          '</div>' +
+          (coachCount > 0 ? '<span style="background:var(--navy-light);border:1px solid var(--border);border-radius:20px;padding:4px 12px;font-size:11px;color:var(--text-muted);white-space:nowrap;">' + coachCount + ' coach' + (coachCount !== 1 ? 'es' : '') + ' with email on file</span>' : '') +
+        '</div>' +
+        '<div id="recapCopyTarget">' +
+          '<div style="background:var(--navy-light);border-left:3px solid var(--red);border-radius:0 8px 8px 0;padding:16px 20px;margin-bottom:20px;font-size:13px;line-height:1.7;color:var(--text-primary);">' + recapJson.recap.replace(/\n\n/g, '</p><p style="margin-top:10px;">').replace(/^/, '<p>').replace(/$/, '</p>') + '</div>' +
+          buildRecapStandingsTable(standings) +
+          buildRecapBattingTable(batting) +
+          buildRecapPitchingTable(pitching) +
+          buildRecapPotgSection(potgData) +
+          buildRecapAllTournamentSection(allTournament) +
+          '<div style="margin-top:24px;padding-top:16px;border-top:1px solid var(--border);text-align:center;font-size:11px;color:var(--text-muted);">Powered by Unrivaled Connect Event Central</div>' +
+        '</div>' +
+        '<div style="display:flex;gap:10px;margin-top:20px;">' +
+          '<button onclick="copyRecapToClipboard()" style="flex:1;padding:10px;background:var(--navy-light);color:var(--text-primary);border:1px solid var(--border);border-radius:6px;cursor:pointer;font-weight:600;font-size:13px;">Copy HTML</button>' +
+          '<button onclick="sendRecapToCoaches(\'' + ageGroup.replace(/'/g, "\\'") + '\')" style="flex:2;padding:10px;background:var(--red);color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:600;font-size:13px;">Send to All Coaches in ' + ageGroup + '</button>' +
+        '</div>';
+
+        container.innerHTML = previewHtml;
+      } catch (err) {
+        container.innerHTML = '<div style="text-align:center;padding:30px;"><p style="color:var(--danger);font-size:14px;margin-bottom:16px;">Error: ' + (err.message || 'Failed to generate recap') + '</p><p style="font-size:12px;color:var(--text-muted);">Try selecting a different division or check that games have been played.</p></div>';
+      }
+    }
+
+    function copyRecapToClipboard() {
+      var target = document.getElementById('recapCopyTarget');
+      if (!target) return;
+      try {
+        var htmlContent = target.innerHTML;
+        var blob = new Blob([htmlContent], { type: 'text/html' });
+        var textBlob = new Blob([target.innerText], { type: 'text/plain' });
+        navigator.clipboard.write([new ClipboardItem({ 'text/html': blob, 'text/plain': textBlob })]).then(function() {
+          showToast('Recap HTML copied to clipboard!');
+        });
+      } catch (e) {
+        navigator.clipboard.writeText(target.innerText).then(function() {
+          showToast('Recap copied as plain text');
+        });
+      }
+    }
+
+    function sendRecapToCoaches(ageGroup) {
+      showToast('Email sending coming soon — use Copy HTML for now');
+    }
+
     async function openGameEditor(gameId) {
       var content = document.getElementById('eventDetailContent');
       content.innerHTML = '<div style="text-align:center; padding:20px; color:var(--text-muted);">Loading box score...</div>';
