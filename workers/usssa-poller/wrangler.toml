@@ -1,0 +1,11 @@
+name = "usssa-poller"
+main = "worker.js"
+compatibility_date = "2024-01-01"
+
+# Cron trigger: every 10 minutes
+[triggers]
+crons = ["*/10 * * * *"]
+
+# Environment variables (set these in Cloudflare dashboard or via wrangler secret)
+# SUPABASE_URL = "https://fpeogwnjvvwpeihnlbws.supabase.co"
+# SUPABASE_SERVICE_KEY = "your-service-role-key"  # NOT the anon key - use service_role key
