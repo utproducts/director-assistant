@@ -1539,6 +1539,11 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4-4v2"/><circle cx="12" cy="7" r="4"/></svg>
           Users
         </div>
+        <div class="nav-item" onclick="switchPage('reg-tracker', this)" data-role="admin">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+          Registrations
+          <span class="nav-badge" id="regTrackerCount" style="background:linear-gradient(135deg,#10b981,#3b82f6)">0</span>
+        </div>
         <div class="nav-item" onclick="switchPage('settings', this)">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
           Settings
@@ -3363,6 +3368,90 @@ This is a one-time submission — your link will be used for all events this sea
   </div>
 
   <div class="toast" id="toast"></div>
+
+  <!-- ===== REGISTRATION TRACKER PAGE ===== -->
+  <div class="page-section" id="page-reg-tracker">
+    <div class="page-header">
+      <div>
+        <h1>Registration Tracker</h1>
+        <p>Live USSSA tournament registration feed — auto-refreshes every 10 minutes</p>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <span id="rtLastPoll" style="font-size:12px;color:var(--text-muted);">Last sync: never</span>
+        <span id="rtLiveDot" style="width:8px;height:8px;background:var(--success);border-radius:50%;display:inline-block;"></span>
+        <button class="btn btn-secondary btn-sm" onclick="rtForceRefresh()">Refresh Now</button>
+        <button class="btn btn-secondary btn-sm" onclick="rtShowCookieModal()">USSSA Setup</button>
+      </div>
+    </div>
+
+    <!-- Stats Bar -->
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:20px;">
+      <div style="background:var(--navy-light);border-radius:var(--radius-sm);padding:16px;border-left:4px solid var(--red);">
+        <div style="font-size:24px;font-weight:700;" id="rtStatEvents">0</div>
+        <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">Events</div>
+      </div>
+      <div style="background:var(--navy-light);border-radius:var(--radius-sm);padding:16px;border-left:4px solid var(--success);">
+        <div style="font-size:24px;font-weight:700;" id="rtStatTeams">0</div>
+        <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">Total Teams</div>
+      </div>
+      <div style="background:var(--navy-light);border-radius:var(--radius-sm);padding:16px;border-left:4px solid var(--blue-bright);">
+        <div style="font-size:24px;font-weight:700;" id="rtStatRevenue">$0</div>
+        <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">Entry Revenue</div>
+      </div>
+      <div style="background:var(--navy-light);border-radius:var(--radius-sm);padding:16px;border-left:4px solid var(--warning);">
+        <div style="font-size:24px;font-weight:700;" id="rtStatEntries">0</div>
+        <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">Recent Entries</div>
+      </div>
+    </div>
+
+    <!-- Filters -->
+    <div style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap;align-items:center;">
+      <input type="text" id="rtSearch" placeholder="Search events, teams, directors..." style="flex:1;min-width:200px;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:14px;" oninput="rtRender()">
+      <select id="rtRegionFilter" onchange="rtRender()" style="padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:14px;">
+        <option value="">All Regions</option>
+        <option value="AZ1">AZ1 - Arizona</option>
+        <option value="CA1">CA1 - Southern Cal</option>
+        <option value="CA2">CA2 - Southern Cal</option>
+        <option value="FL1">FL1 - Florida</option>
+        <option value="IA1">IA1 - Iowa</option>
+        <option value="KS1">KS1 - Kansas</option>
+        <option value="LA1">LA1 - Louisiana</option>
+        <option value="NCTB">NCTB - NorCal</option>
+        <option value="TX1">TX1 - Texas</option>
+      </select>
+      <select id="rtSort" onchange="rtRender()" style="padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:14px;">
+        <option value="date-asc">Soonest First</option>
+        <option value="date-desc">Latest First</option>
+        <option value="teams-desc">Most Teams</option>
+        <option value="revenue-desc">Highest Revenue</option>
+        <option value="region">By Region</option>
+      </select>
+      <button class="btn btn-secondary btn-sm" onclick="rtToggleAll(true)">Expand All</button>
+      <button class="btn btn-secondary btn-sm" onclick="rtToggleAll(false)">Collapse All</button>
+    </div>
+
+    <div id="rtEventList" style="display:flex;flex-direction:column;gap:8px;"></div>
+  </div>
+
+  <!-- USSSA Cookie Setup Modal -->
+  <div id="rtCookieModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:10000;align-items:center;justify-content:center;">
+    <div style="background:white;border-radius:var(--radius-lg);padding:32px;max-width:600px;width:90%;max-height:80vh;overflow-y:auto;">
+      <h2 style="margin-bottom:8px;">USSSA Session Setup</h2>
+      <p style="color:var(--text-secondary);margin-bottom:16px;font-size:14px;">Connect to USSSA Director Center for live data sync</p>
+      <ol style="color:var(--text-secondary);font-size:13px;margin-bottom:16px;padding-left:20px;line-height:1.8;">
+        <li>Log into <a href="https://dc.usssa.com" target="_blank" style="color:var(--blue-bright);">dc.usssa.com</a></li>
+        <li>Open browser console (F12 → Console)</li>
+        <li>Paste: <code style="background:var(--navy-light);padding:2px 6px;border-radius:4px;font-size:12px;">copy(document.cookie)</code></li>
+        <li>Paste the cookies below</li>
+      </ol>
+      <textarea id="rtCookieInput" placeholder="Paste cookies here..." style="width:100%;height:80px;padding:10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:monospace;font-size:12px;margin-bottom:12px;"></textarea>
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <button class="btn btn-secondary" onclick="document.getElementById('rtCookieModal').style.display='none'">Cancel</button>
+        <button class="btn btn-primary" onclick="rtSaveCookies()">Save & Sync</button>
+      </div>
+      <div id="rtCookieResult" style="margin-top:12px;font-size:13px;"></div>
+    </div>
+  </div>
 
   <script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <script>
@@ -6789,6 +6878,9 @@ ${ebBlocks.map(b => ebRenderBlock(b)).join('\n')}
       if (page === 'admin-users' && typeof loadAdminUsers === 'function') {
         loadAdminUsers();
       }
+      if (page === 'reg-tracker' && typeof rtLoadData === 'function') {
+        rtLoadData();
+      }
       if (page === 'team-mgmt' && typeof tmLoadTeams === 'function') {
         tmLoadTeams();
       }
@@ -9763,6 +9855,196 @@ async function addNewUser() {
         await tmLoadTeams();
       }
     }
+
+    // ===== REGISTRATION TRACKER =====
+    let rtEvents = [];
+    let rtEntries = [];
+    let rtRefreshInterval = null;
+
+    const RT_REGION_COLORS = {
+      'AZ1':'#ef4444','CA1':'#3b82f6','CA2':'#2563eb','FL1':'#10b981',
+      'IA1':'#f59e0b','KS1':'#8b5cf6','LA1':'#f97316','TX1':'#14b8a6',
+      'NCTB':'#ef4444','UNKNOWN':'#6b7280'
+    };
+
+    async function rtLoadData() {
+      try {
+        const [eventsRes, entriesRes, pollRes] = await Promise.all([
+          sb.from('usssa_events').select('*').eq('season', 2026).order('start_date', {ascending: true}),
+          sb.from('usssa_registrations').select('*').order('entry_date', {ascending: false}).limit(500),
+          sb.from('usssa_poll_log').select('*').order('poll_time', {ascending: false}).limit(1)
+        ]);
+        rtEvents = eventsRes.data || [];
+        rtEntries = entriesRes.data || [];
+        const lastPoll = pollRes.data?.[0];
+        document.getElementById('rtLastPoll').textContent = lastPoll
+          ? 'Last sync: ' + new Date(lastPoll.poll_time).toLocaleString() + ' (' + lastPoll.status + ')'
+          : 'Last sync: never';
+        document.getElementById('rtLiveDot').style.background = lastPoll?.status === 'success' ? 'var(--success)' : 'var(--warning)';
+        document.getElementById('regTrackerCount').textContent = rtEvents.length;
+        rtRender();
+      } catch(e) {
+        console.error('RT load error:', e);
+      }
+    }
+
+    function rtParseTeams(s) {
+      if (!s) return 0;
+      return parseInt(s.toString().split('/')[0]) || 0;
+    }
+
+    function rtParseMoney(s) {
+      if (!s) return 0;
+      return parseFloat(s.toString().replace(/[$,]/g,'')) || 0;
+    }
+
+    function rtRender() {
+      const search = (document.getElementById('rtSearch')?.value || '').toLowerCase();
+      const regionFilter = document.getElementById('rtRegionFilter')?.value || '';
+      const sortBy = document.getElementById('rtSort')?.value || 'date-asc';
+
+      let filtered = rtEvents.filter(e => {
+        if (regionFilter && e.region !== regionFilter) return false;
+        if (search) {
+          const s = [e.event_name, e.event_id, e.director, e.location, e.region, e.state].join(' ').toLowerCase();
+          if (!s.includes(search)) return false;
+        }
+        return true;
+      });
+
+      filtered.sort((a, b) => {
+        switch(sortBy) {
+          case 'date-desc': return new Date(b.start_date||0) - new Date(a.start_date||0);
+          case 'date-asc': return new Date(a.start_date||0) - new Date(b.start_date||0);
+          case 'teams-desc': return rtParseTeams(b.teams_placed) - rtParseTeams(a.teams_placed);
+          case 'revenue-desc': return rtParseMoney(b.total_due) - rtParseMoney(a.total_due);
+          case 'region': return (a.region||'').localeCompare(b.region||'');
+          default: return 0;
+        }
+      });
+
+      // Stats
+      const totalTeams = filtered.reduce((s,e) => s + rtParseTeams(e.teams_placed), 0);
+      const totalRevenue = filtered.reduce((s,e) => s + rtParseMoney(e.total_due), 0);
+      document.getElementById('rtStatEvents').textContent = filtered.length;
+      document.getElementById('rtStatTeams').textContent = totalTeams.toLocaleString();
+      document.getElementById('rtStatRevenue').textContent = '$' + totalRevenue.toLocaleString();
+      document.getElementById('rtStatEntries').textContent = rtEntries.length;
+
+      // Group entries by event
+      const entryMap = {};
+      rtEntries.forEach(r => {
+        const key = r.event_id || (r.tournament||'').split('(')[0].trim();
+        if (!entryMap[key]) entryMap[key] = [];
+        entryMap[key].push(r);
+      });
+
+      const container = document.getElementById('rtEventList');
+      if (filtered.length === 0) {
+        container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-muted);">No events found. Click "USSSA Setup" to connect your USSSA session and start syncing data.</div>';
+        return;
+      }
+
+      container.innerHTML = filtered.map((e, idx) => {
+        const teams = rtParseTeams(e.teams_placed);
+        const revenue = rtParseMoney(e.total_due);
+        const color = RT_REGION_COLORS[e.region] || '#6b7280';
+        const entries = entryMap[e.event_id] || entryMap[e.event_name] || [];
+
+        const entryRows = entries.length > 0 ? entries.map(r => `
+          <tr style="border-bottom:1px solid var(--border-light);">
+            <td style="padding:6px 8px;color:var(--warning);font-size:13px;">${r.entry_date||''}</td>
+            <td style="padding:6px 8px;font-size:13px;">${r.payment_date||''}</td>
+            <td style="padding:6px 8px;font-weight:500;font-size:13px;">${r.team_name||''}</td>
+            <td style="padding:6px 8px;color:var(--blue-bright);font-size:13px;">${r.division||''}</td>
+            <td style="padding:6px 8px;font-size:13px;">${r.team_num ? '#'+r.team_num : ''}</td>
+            <td style="padding:6px 8px;font-size:13px;color:${(r.status||'').includes('Approved')?'var(--success)':'var(--warning)'};">${r.status||''}</td>
+          </tr>
+        `).join('') : `<tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:20px;font-size:13px;">${teams > 0 ? teams+' teams registered' : 'No registrations yet'}</td></tr>`;
+
+        return `
+        <div style="background:var(--navy-light);border-radius:var(--radius-sm);overflow:hidden;border:1px solid var(--border-light);">
+          <div onclick="rtToggle(${idx})" style="display:flex;align-items:center;padding:12px 16px;cursor:pointer;gap:12px;transition:background 0.15s;" onmouseover="this.style.background='var(--navy-mid)'" onmouseout="this.style.background='transparent'">
+            <span id="rtArrow-${idx}" style="font-size:11px;color:var(--text-muted);transition:transform 0.2s;min-width:14px;">&#9654;</span>
+            <span style="background:${color};color:white;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;min-width:36px;text-align:center;">${e.region||'?'}</span>
+            <span style="color:var(--text-muted);font-size:12px;min-width:60px;">#${e.event_id||''}</span>
+            <span style="font-weight:600;flex:1;">${e.event_name||'Unnamed'}</span>
+            <span style="color:var(--text-muted);font-size:13px;min-width:90px;">${e.start_date||''}</span>
+            <span style="color:var(--text-secondary);font-size:13px;min-width:120px;">${e.director||''}</span>
+            <span style="font-weight:700;color:var(--success);min-width:60px;text-align:right;">${teams} teams</span>
+            <span style="font-weight:600;color:var(--success);min-width:80px;text-align:right;">${revenue ? '$'+revenue.toLocaleString() : ''}</span>
+          </div>
+          <div id="rtBody-${idx}" style="display:none;padding:0 16px 12px;">
+            <div style="padding:6px 0;color:var(--text-muted);font-size:12px;">📍 ${e.location||''}, ${e.state||''} · ${e.stature||''} · ${e.divisions_filled||''} divisions</div>
+            <table style="width:100%;border-collapse:collapse;">
+              <thead><tr style="border-bottom:1px solid var(--border);">
+                <th style="text-align:left;padding:6px 8px;font-size:11px;color:var(--text-muted);text-transform:uppercase;">Entry Date</th>
+                <th style="text-align:left;padding:6px 8px;font-size:11px;color:var(--text-muted);text-transform:uppercase;">Payment</th>
+                <th style="text-align:left;padding:6px 8px;font-size:11px;color:var(--text-muted);text-transform:uppercase;">Team</th>
+                <th style="text-align:left;padding:6px 8px;font-size:11px;color:var(--text-muted);text-transform:uppercase;">Division</th>
+                <th style="text-align:left;padding:6px 8px;font-size:11px;color:var(--text-muted);text-transform:uppercase;">#</th>
+                <th style="text-align:left;padding:6px 8px;font-size:11px;color:var(--text-muted);text-transform:uppercase;">Status</th>
+              </tr></thead>
+              <tbody>${entryRows}</tbody>
+            </table>
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    function rtToggle(idx) {
+      const body = document.getElementById('rtBody-'+idx);
+      const arrow = document.getElementById('rtArrow-'+idx);
+      if (!body) return;
+      const isOpen = body.style.display === 'none';
+      body.style.display = isOpen ? 'block' : 'none';
+      if (arrow) arrow.style.transform = isOpen ? 'rotate(90deg)' : '';
+    }
+
+    function rtToggleAll(open) {
+      document.querySelectorAll('[id^="rtBody-"]').forEach(b => b.style.display = open ? 'block' : 'none');
+      document.querySelectorAll('[id^="rtArrow-"]').forEach(a => a.style.transform = open ? 'rotate(90deg)' : '');
+    }
+
+    async function rtForceRefresh() {
+      document.getElementById('rtLastPoll').textContent = 'Syncing...';
+      await rtLoadData();
+    }
+
+    function rtShowCookieModal() {
+      document.getElementById('rtCookieModal').style.display = 'flex';
+    }
+
+    async function rtSaveCookies() {
+      const raw = document.getElementById('rtCookieInput').value.trim();
+      const resultEl = document.getElementById('rtCookieResult');
+      if (!raw) { resultEl.innerHTML = '<span style="color:var(--danger);">Please paste cookies</span>'; return; }
+      try {
+        // Parse cookie string into object
+        let cookies = {};
+        if (raw.startsWith('{')) {
+          cookies = JSON.parse(raw);
+        } else {
+          raw.split(';').forEach(c => {
+            const [k,...v] = c.trim().split('=');
+            if (k) cookies[k.trim()] = v.join('=').trim();
+          });
+        }
+        const { error } = await sb.from('usssa_config').update({ cookies: cookies, last_cookie_update: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('id', 1);
+        if (error) throw error;
+        resultEl.innerHTML = '<span style="color:var(--success);">Cookies saved! Data will sync on next poll cycle.</span>';
+        setTimeout(() => { document.getElementById('rtCookieModal').style.display='none'; }, 2000);
+      } catch(e) {
+        resultEl.innerHTML = '<span style="color:var(--danger);">Error: '+e.message+'</span>';
+      }
+    }
+
+    // Auto-refresh every 10 minutes when on the tracker page
+    setInterval(() => {
+      if (document.getElementById('page-reg-tracker')?.classList.contains('active')) {
+        rtLoadData();
+      }
+    }, 10 * 60 * 1000);
 
   </script>
 </body>
