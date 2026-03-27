@@ -1,284 +1,329 @@
 /**
- * UBN USSSA Poller — Cloudflare Worker
- * =====================================
+ * UBN USSSA Poller — Cloudflare Worker (Updated)
+ * ================================================
+ * Added: GET /divisions endpoint — returns live division data for all 63 events
+ *        Caches results in KV (USSSA_DIVISIONS) for 1 hour
+ * Fixed: pollUSSSA now iterates TARGET_EVENT_IDS directly (batch of 7 per cycle)
+ *        instead of broken director-name filter that returned 0 events.
  * Runs every 10 minutes via Cron Trigger.
- * Pulls event data from USSSA Director Center and writes to Supabase.
- *
- * SETUP:
- * 1. Create this Worker in Cloudflare dashboard
- * 2. Add environment variables: SUPABASE_URL, SUPABASE_SERVICE_KEY
- * 3. Add Cron Trigger: */10 * * * * (every 10 minutes)
- * 4. Save USSSA cookies via the Director Assistant UI (/setup page)
  */
 
 const USSSA_API = 'https://dc.usssa.com/api/';
-const USSSA_ENGINE = 'https://engine.usssa.com/sports/';
+const ACCOUNT_ID = '15782127b37f9a925bbab8593969eac3';
+
+// All 63 events in the tournament manager
+const TARGET_EVENT_IDS = [
+  410565,411024,410276,410277,410901,410570,410256,412331,409752,410564,
+  410264,410524,411002,410572,410260,409753,410525,411003,410573,411027,
+  410531,410985,410575,410265,410268,411007,410262,409754,412332,410534,
+  410576,410577,409756,409755,409757,410257,410263,410535,410578,410579,
+  411031,412333,409758,410581,410266,410258,413132,409759,411033,410536,
+  410582,407745,410259,407746,408656,411008,408881,410542,411010,408659,
+  411009,408658,408903
+];
+
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type',
+  'Content-Type': 'application/json',
+};
 
 const DIRECTOR_REGION_MAP = {
-  'Cory Perreault': 'AZ1',
-  'Steve Hassett': 'FL1',
-  'Sebastian Hassett': 'FL1',
-  'Darrell Hannaseck': 'FL1',
-  'Darrel Hannaseck': 'FL1',
-  'Roger Miller': 'FL1',
-  'Scott Rutherford': 'FL1',
-  'Jeremy Huffman': 'CA1',
-  'Enrique Guillen': 'CA2',
-  'Bob Egr': 'IA1',
-  'Kale Egr': 'IA1',
-  'Dillon Egr': 'IA1',
-  'Ryan Highfill': 'KS1',
-  'Frank Griffin': 'LA1',
-  'TJ Russell': 'LA1',
-  'Cody Whitehead': 'TX1',
-  'North Carolina State Office': 'NCTB',
+  'Cory Perreault': 'AZ1', 'Steve Hassett': 'FL1', 'Sebastian Hassett': 'FL1',
+  'Darrell Hannaseck': 'FL1', 'Darrel Hannaseck': 'FL1', 'Roger Miller': 'FL1',
+  'Scott Rutherford': 'FL1', 'Jeremy Huffman': 'CA1', 'Enrique Guillen': 'CA2',
+  'Bob Egr': 'IA1', 'Kale Egr': 'IA1', 'Dillon Egr': 'IA1',
+  'Ryan Highfill': 'KS1', 'Frank Griffin': 'LA1', 'TJ Russell': 'LA1',
+  'Cody Whitehead': 'TX1', 'North Carolina State Office': 'NCTB',
+  'Suncoast State Office': 'FL1', 'Suncoast Office': 'FL1',
 };
 
 export default {
-  // HTTP handler (for manual triggers)
   async fetch(request, env) {
     const url = new URL(request.url);
+
+    // Handle CORS preflight
+    if (request.method === 'OPTIONS') {
+      return new Response(null, { headers: CORS_HEADERS });
+    }
+
+    // — GET /divisions ————————————————————————————————————————————————————————
+    if (url.pathname === '/divisions') {
+      try {
+        const cached = env.USSSA_DIVISIONS ? await env.USSSA_DIVISIONS.get('all', { type: 'json' }) : null;
+        const cacheAge = env.USSSA_DIVISIONS ? await env.USSSA_DIVISIONS.get('all_updated') : null;
+        const ageMs = cacheAge ? Date.now() - parseInt(cacheAge) : Infinity;
+
+        if (cached && ageMs < 3600000) {
+          return new Response(JSON.stringify({
+            status: 'ok', source: 'cache',
+            updatedAt: new Date(parseInt(cacheAge)).toISOString(),
+            divisions: cached
+          }), { headers: CORS_HEADERS });
+        }
+
+        const fresh = await fetchAllDivisions(env);
+        if (env.USSSA_DIVISIONS) {
+          await env.USSSA_DIVISIONS.put('all', JSON.stringify(fresh));
+          await env.USSSA_DIVISIONS.put('all_updated', String(Date.now()));
+        }
+
+        return new Response(JSON.stringify({
+          status: 'ok', source: 'live',
+          updatedAt: new Date().toISOString(),
+          divisions: fresh
+        }), { headers: CORS_HEADERS });
+
+      } catch (e) {
+        return new Response(JSON.stringify({ status: 'error', message: e.message }), {
+          status: 500, headers: CORS_HEADERS
+        });
+      }
+    }
+
+    // — GET /divisions/refresh — force cache refresh ————————————————————————
+    if (url.pathname === '/divisions/refresh') {
+      try {
+        const fresh = await fetchAllDivisions(env);
+        if (env.USSSA_DIVISIONS) {
+          await env.USSSA_DIVISIONS.put('all', JSON.stringify(fresh));
+          await env.USSSA_DIVISIONS.put('all_updated', String(Date.now()));
+        }
+        const eventCount = Object.keys(fresh).length;
+        const divCount = Object.values(fresh).reduce((s, d) => s + d.length, 0);
+        return new Response(JSON.stringify({
+          status: 'ok', message: `Refreshed ${eventCount} events, ${divCount} total divisions`,
+          updatedAt: new Date().toISOString()
+        }), { headers: CORS_HEADERS });
+      } catch (e) {
+        return new Response(JSON.stringify({ status: 'error', message: e.message }), {
+          status: 500, headers: CORS_HEADERS
+        });
+      }
+    }
+
+    // — GET /teams-search —————————————————————————————————————————————————————
+    if (url.pathname === '/teams-search') {
+      try {
+        const age = url.searchParams.get('age') || '';
+        const state = url.searchParams.get('state') || '';
+        if (!age) return new Response(JSON.stringify({ status: 'error', message: 'age param required' }), { status: 400, headers: CORS_HEADERS });
+        let qs = 'select=team_name,team_city,team_state,manager_name,manager_email,manager_phone,division,entry_status,payment_status&division=ilike.' + encodeURIComponent('%' + age + '%') + '&order=team_name.asc&limit=400';
+        if (state && state !== 'all') qs += '&team_state=eq.' + encodeURIComponent(state);
+        const resp = await fetch(env.SUPABASE_URL + '/rest/v1/usssa_registrations?' + qs, {
+          headers: { 'apikey': env.SUPABASE_SERVICE_KEY, 'Authorization': 'Bearer ' + env.SUPABASE_SERVICE_KEY, 'Content-Type': 'application/json' }
+        });
+        if (!resp.ok) throw new Error('Supabase ' + resp.status + ': ' + await resp.text());
+        const rows = await resp.json();
+        const seen = new Set();
+        const teams = rows.filter(t => { if (seen.has(t.team_name)) return false; seen.add(t.team_name); return true; });
+        return new Response(JSON.stringify({ status: 'ok', count: teams.length, teams }), { headers: CORS_HEADERS });
+      } catch (e) {
+        return new Response(JSON.stringify({ status: 'error', message: e.message }), { status: 500, headers: CORS_HEADERS });
+      }
+    }
+
+    // — Existing endpoints ————————————————————————————————————————————————————
     if (url.pathname === '/poll') {
       const result = await pollUSSSA(env);
-      return new Response(JSON.stringify(result, null, 2), {
-        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
-      });
+      return new Response(JSON.stringify(result, null, 2), { headers: CORS_HEADERS });
     }
     if (url.pathname === '/status') {
       const result = await getStatus(env);
-      return new Response(JSON.stringify(result, null, 2), {
-        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
-      });
+      return new Response(JSON.stringify(result, null, 2), { headers: CORS_HEADERS });
     }
-    return new Response('UBN USSSA Poller\n\nGET /status - Check status\nGET /poll - Trigger manual poll\n\nCron: every 10 minutes', {
-      headers: { 'Content-Type': 'text/plain' }
-    });
+
+    return new Response(
+      'UBN USSSA Poller\n\nGET /divisions        — Live division data (1h cache)\nGET /divisions/refresh — Force cache refresh\nGET /teams-search     — Search teams by age/state\nGET /poll             — Trigger manual poll\nGET /status           — Check status',
+      { headers: { 'Content-Type': 'text/plain' } }
+    );
   },
 
-  // Cron handler (runs every 10 minutes)
   async scheduled(event, env, ctx) {
     ctx.waitUntil(pollUSSSA(env));
   }
 };
 
+// — Fetch all 63 events' division data ————————————————————————————————————————
+async function fetchAllDivisions(env) {
+  const cookieStr = await getCookieStr(env);
+  const results = {};
+
+  const BATCH_SIZE = 10;
+  for (let i = 0; i < TARGET_EVENT_IDS.length; i += BATCH_SIZE) {
+    const batch = TARGET_EVENT_IDS.slice(i, i + BATCH_SIZE);
+    const batchResults = await Promise.all(
+      batch.map(eventId => fetchDivisionsForEvent(cookieStr, eventId))
+    );
+    batch.forEach((eventId, idx) => {
+      results[String(eventId)] = batchResults[idx];
+    });
+  }
+
+  return results;
+}
+
+async function fetchDivisionsForEvent(cookieStr, eventId) {
+  try {
+    const resp = await fetch(`${USSSA_API}?action=divisionTable`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Cookie': cookieStr,
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+        'X-Requested-With': 'XMLHttpRequest',
+        'Accept': 'application/json, text/plain, */*',
+      },
+      body: `json=${encodeURIComponent(JSON.stringify({
+        page: 1, rows: 50, sort: {},
+        filter: { eventID: eventId }
+      }))}`
+    });
+
+    if (!resp.ok) return [];
+    const data = await resp.json();
+    if (!data.status || !data.data) return [];
+
+    return data.data.map(d => ({
+      divID: String(d.divisionID),
+      ageCode: (d.className || '').trim(),
+      numTeams: d.numberOfTeams || 0,
+      maxTeams: d.MaxTeams || 0,
+      status: d.status || '',
+    })).filter(d => d.divID && d.ageCode);
+  } catch (e) {
+    console.error(`fetchDivisions error for event ${eventId}:`, e.message);
+    return [];
+  }
+}
+
+async function getCookieStr(env) {
+  const configRes = await supabaseQuery(env, 'usssa_config', 'select=cookies&id=eq.1');
+  const cookies = configRes?.[0]?.cookies;
+  if (!cookies || Object.keys(cookies).length === 0) {
+    throw new Error('No USSSA cookies configured in Supabase usssa_config');
+  }
+  return Object.entries(cookies).map(([k, v]) => `${k}=${v}`).join('; ');
+}
+
+// — Poll status ———————————————————————————————————————————————————————————————
 async function getStatus(env) {
   const res = await supabaseQuery(env, 'usssa_poll_log', 'select=*&order=poll_time.desc&limit=5');
   return { recentPolls: res, workerActive: true };
 }
 
+// — FIXED pollUSSSA: iterates TARGET_EVENT_IDS directly, batch of 7 per cycle —
 async function pollUSSSA(env) {
   const startTime = Date.now();
-  let eventsCount = 0;
-  let entriesCount = 0;
+  let registrationsCount = 0;
   let errors = [];
 
   try {
-    // 1. Get cookies from Supabase config
-    const configRes = await supabaseQuery(env, 'usssa_config', 'select=cookies&id=eq.1');
-    const cookies = configRes?.[0]?.cookies;
+    const cookieStr = await getCookieStr(env);
 
-    if (!cookies || Object.keys(cookies).length === 0) {
-      await logPoll(env, 'error', 0, 0, 'No USSSA cookies configured', Date.now() - startTime);
-      return { status: 'error', message: 'No cookies configured. Use Director Assistant setup page.' };
+    // Pick a batch of 7 event IDs based on the current 10-minute cycle index.
+    // This covers all 63 events across 9 cycles (~90 minutes total coverage).
+    const BATCH_SIZE = 7;
+    const cycleIndex = Math.floor(Date.now() / 600000);
+    const startIdx = (cycleIndex * BATCH_SIZE) % TARGET_EVENT_IDS.length;
+    const eventIdBatch = [];
+    for (let i = 0; i < BATCH_SIZE; i++) {
+      eventIdBatch.push(TARGET_EVENT_IDS[(startIdx + i) % TARGET_EVENT_IDS.length]);
     }
 
-    // Build cookie string
-    const cookieStr = Object.entries(cookies).map(([k, v]) => `${k}=${v}`).join('; ');
+    for (const eventId of eventIdBatch) {
+      try {
+        const divisions = await fetchDivisionsForEvent(cookieStr, eventId);
+        if (divisions.length === 0) continue;
 
-    // 2. Fetch events from USSSA
-    try {
-      const eventsHtml = await fetchUSSSAEvents(cookieStr);
-      const events = parseEventsFromHTML(eventsHtml);
-      if (events.length > 0) {
-        await upsertEvents(env, events);
-        eventsCount = events.length;
-      } else {
-        errors.push('No events parsed (session may have expired)');
+        for (const division of divisions) {
+          try {
+            const teamsResp = await fetchUSSSATeams(cookieStr, parseInt(division.divID));
+            const event = {
+              event_id: String(eventId),
+              event_name: `Event ${eventId}`,
+              start_date: '',
+              region: 'UNKNOWN',
+              director: '',
+            };
+            const teams = parseTeamsResponse(teamsResp, event, {
+              division_id: division.divID,
+              division_name: division.ageCode,
+            });
+            if (teams.length > 0) {
+              const inserted = await insertNewRegistrations(env, teams, event, {
+                division_id: division.divID,
+                division_name: division.ageCode,
+              });
+              registrationsCount += inserted;
+            }
+          } catch (e) {
+            errors.push(`Teams div ${division.divID}: ${e.message}`);
+          }
+        }
+      } catch (e) {
+        errors.push(`Event ${eventId}: ${e.message}`);
       }
-    } catch (e) {
-      errors.push(`Events: ${e.message}`);
-    }
-
-    // 3. Fetch latest entries
-    try {
-      const entriesHtml = await fetchLatestEntries(cookieStr);
-      const entries = parseEntriesFromHTML(entriesHtml);
-      if (entries.length > 0) {
-        await insertEntries(env, entries);
-        entriesCount = entries.length;
-      }
-    } catch (e) {
-      errors.push(`Entries: ${e.message}`);
     }
 
     const status = errors.length === 0 ? 'success' : 'partial';
     const duration = Date.now() - startTime;
-    await logPoll(env, status, eventsCount, entriesCount, errors.join('; '), duration);
-
-    return { status, eventsCount, entriesCount, errors, durationMs: duration };
+    await logPoll(env, status, registrationsCount, errors.join('; '), duration);
+    return { status, registrationsCount, eventsBatch: eventIdBatch, errors, durationMs: duration };
 
   } catch (e) {
     const duration = Date.now() - startTime;
-    await logPoll(env, 'error', 0, 0, e.message, duration);
+    await logPoll(env, 'error', 0, e.message, duration);
     return { status: 'error', message: e.message, durationMs: duration };
   }
 }
 
-// ===== USSSA API Calls =====
+// — USSSA API helpers —————————————————————————————————————————————————————————
 
-async function fetchUSSSAEvents(cookieStr, season = 2026, sportId = 11) {
+async function fetchUSSSATeams(cookieStr, divisionId) {
   const payload = `json=${encodeURIComponent(JSON.stringify({
-    rows: 500,
-    filter: {
-      sportID: sportId,
-      season: season,
-      showMine: true,
-      month: '',
-      stateID: '',
-      eventID: '',
-      directorName: ''
-    }
+    rows: 100, filter: { divisionID: divisionId, sportID: 11 }
   }))}`;
-
-  const resp = await fetch(`${USSSA_API}?action=eventsTable`, {
+  const resp = await fetch(`${USSSA_API}?action=teamsTable`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
       'Cookie': cookieStr,
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+      'User-Agent': 'Mozilla/5.0',
       'X-Requested-With': 'XMLHttpRequest',
     },
     body: payload,
   });
-
-  if (!resp.ok) throw new Error(`USSSA events API returned ${resp.status}`);
+  if (!resp.ok) throw new Error(`USSSA teams API: ${resp.status}`);
   return await resp.text();
 }
 
-async function fetchLatestEntries(cookieStr) {
-  const resp = await fetch(`${USSSA_ENGINE}OnlineEntries.asp`, {
-    headers: {
-      'Cookie': cookieStr,
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
-    },
-  });
-
-  if (!resp.ok) throw new Error(`USSSA entries API returned ${resp.status}`);
-  return await resp.text();
-}
-
-// ===== HTML Parsers =====
-
-function parseEventsFromHTML(html) {
-  const events = [];
-
-  // Try JSON first (API might return JSON array)
+function parseTeamsResponse(responseText, event, division) {
   try {
-    const parsed = JSON.parse(html);
-    if (Array.isArray(parsed)) {
-      return parsed.map(e => ({
-        event_id: String(e.eventID || e.event_id || ''),
-        event_name: e.eventName || e.event_name || '',
-        state: e.state || '',
-        location: e.location || '',
-        start_date: e.startDate || e.start_date || '',
-        divisions_filled: e.divisionsFilled || e.divisions_filled || '',
-        stature: e.stature || '',
-        teams_placed: e.teamsPlaced || e.teams_placed || '',
-        director: e.director || '',
-        region: DIRECTOR_REGION_MAP[e.director] || 'UNKNOWN',
-        entry_due: e.entryDue || e.entry_due || '',
-        gate_due: e.gateDue || e.gate_due || '',
-        other_due: e.otherDue || e.other_due || '',
-        total_due: e.totalDue || e.total_due || '',
-        event_status: e.eventStatus || e.event_status || '',
-        progress: e.progress || '',
-        season: 2026,
-      }));
-    }
-  } catch (e) { /* Not JSON, try HTML */ }
-
-  // Parse HTML table rows
-  const rowRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
-  const cellRegex = /<td[^>]*>([\s\S]*?)<\/td>/gi;
-  const stripTags = s => s.replace(/<[^>]+>/g, '').trim();
-
-  let rowMatch;
-  while ((rowMatch = rowRegex.exec(html)) !== null) {
-    const cells = [];
-    let cellMatch;
-    const cellStr = rowMatch[1];
-    const cellRe = /<td[^>]*>([\s\S]*?)<\/td>/gi;
-    while ((cellMatch = cellRe.exec(cellStr)) !== null) {
-      cells.push(stripTags(cellMatch[1]));
-    }
-
-    if (cells.length < 10) continue;
-    const eventId = cells[0];
-    if (!/^\d{5,6}$/.test(eventId)) continue;
-
-    const director = cells[10] || '';
-    events.push({
-      event_id: eventId,
-      state: cells[1] || '',
-      location: cells[2] || '',
-      start_date: cells[3] || '',
-      event_name: cells[4] || '',
-      divisions_filled: cells[5] || '',
-      stature: cells[6] || '',
-      teams_placed: cells[7] || '',
-      director: director,
-      region: DIRECTOR_REGION_MAP[director] || 'UNKNOWN',
-      entry_due: cells[11] || '',
-      gate_due: cells[12] || '',
-      other_due: cells[13] || '',
-      total_due: cells[14] || '',
-      event_status: cells[15] || '',
-      progress: '',
-      season: 2026,
-    });
+    const parsed = JSON.parse(responseText);
+    return (parsed.data || []).map(t => ({
+      event_id: event.event_id,
+      event_name: event.event_name,
+      event_date: event.start_date,
+      division: division.division_name,
+      team_name: (t.teamName || '').toString().trim(),
+      manager_name: (t.managerName || '').toString().trim(),
+      manager_email: (t.managerEmail || '').toString().trim(),
+      manager_phone: (t.managerPhone || '').toString().trim(),
+      team_city: (t.city || '').toString().trim(),
+      team_state: (t.state || '').toString().trim(),
+      entry_status: (t.entryStatus || '').toString().trim(),
+      payment_status: (t.paymentStatus || '').toString().trim(),
+      region: event.region,
+      director: event.director,
+    })).filter(t => t.team_name);
+  } catch {
+    return [];
   }
-
-  return events;
 }
 
-function parseEntriesFromHTML(html) {
-  const entries = [];
-  const rowRegex = /<tr[^>]*bgcolor[^>]*>([\s\S]*?)<\/tr>/gi;
-  const stripTags = s => s.replace(/<[^>]+>/g, '').trim();
-  const linkText = s => { const m = s.match(/<a[^>]*>([\s\S]*?)<\/a>/); return m ? stripTags(m[1]) : stripTags(s); };
-
-  let match;
-  while ((match = rowRegex.exec(html)) !== null) {
-    const cellRe = /<td[^>]*>([\s\S]*?)<\/td>/gi;
-    const cells = [];
-    let cm;
-    while ((cm = cellRe.exec(match[1])) !== null) cells.push(cm[1]);
-
-    if (cells.length < 6) continue;
-    const entryDate = stripTags(cells[0]);
-    if (!/\d+\/\d+\/\d+/.test(entryDate)) continue;
-
-    const tournament = linkText(cells[3] || '');
-    const team = linkText(cells[4] || '');
-    const divMatch = tournament.match(/\(([^)]+)\)/);
-
-    entries.push({
-      entry_date: entryDate,
-      payment_date: stripTags(cells[1] || ''),
-      start_date: stripTags(cells[2] || ''),
-      team_num: stripTags(cells[3] || '').split(')')[0]?.split('(').pop() || '',
-      tournament: tournament,
-      division: divMatch ? divMatch[1] : '',
-      team_name: team,
-      status: stripTags(cells[5] || ''),
-    });
-  }
-
-  return entries;
-}
-
-// ===== Supabase Helpers =====
+// — Supabase helpers —————————————————————————————————————————————————————————
 
 async function supabaseQuery(env, table, query) {
   const resp = await fetch(`${env.SUPABASE_URL}/rest/v1/${table}?${query}`, {
@@ -288,29 +333,19 @@ async function supabaseQuery(env, table, query) {
       'Content-Type': 'application/json',
     }
   });
-  if (!resp.ok) throw new Error(`Supabase ${table} query failed: ${resp.status}`);
+  if (!resp.ok) throw new Error(`Supabase ${table}: ${resp.status}`);
   return await resp.json();
 }
 
-async function upsertEvents(env, events) {
-  const resp = await fetch(`${env.SUPABASE_URL}/rest/v1/usssa_events`, {
-    method: 'POST',
-    headers: {
-      'apikey': env.SUPABASE_SERVICE_KEY,
-      'Authorization': `Bearer ${env.SUPABASE_SERVICE_KEY}`,
-      'Content-Type': 'application/json',
-      'Prefer': 'resolution=merge-duplicates',
-    },
-    body: JSON.stringify(events.map(e => ({ ...e, updated_at: new Date().toISOString() }))),
-  });
-  if (!resp.ok) {
-    const text = await resp.text();
-    throw new Error(`Upsert events failed: ${resp.status} - ${text}`);
-  }
-}
+async function insertNewRegistrations(env, teams, event, division) {
+  if (teams.length === 0) return 0;
+  const existing = await supabaseQuery(env, 'usssa_registrations',
+    `select=id,team_name,event_id&event_id=eq.${event.event_id}&team_name=in.(${teams.map(t => `"${t.team_name.replace(/"/g, '\\"')}`).join(',')})`
+  );
+  const existingSet = new Set(existing.map(t => `${t.event_id}:${t.team_name}`));
+  const newTeams = teams.filter(t => !existingSet.has(`${event.event_id}:${t.team_name}`));
+  if (newTeams.length === 0) return 0;
 
-async function insertEntries(env, entries) {
-  // Only insert entries we haven't seen before (dedupe by entry_date + team_name + tournament)
   const resp = await fetch(`${env.SUPABASE_URL}/rest/v1/usssa_registrations`, {
     method: 'POST',
     headers: {
@@ -319,16 +354,30 @@ async function insertEntries(env, entries) {
       'Content-Type': 'application/json',
       'Prefer': 'return=minimal',
     },
-    body: JSON.stringify(entries),
+    body: JSON.stringify(newTeams.map(t => ({
+      event_id: t.event_id,
+      tournament: t.event_name,
+      start_date: t.event_date || null,
+      division: t.division,
+      team_name: t.team_name,
+      manager_name: t.manager_name || null,
+      manager_email: t.manager_email || null,
+      manager_phone: t.manager_phone || null,
+      team_city: t.team_city || null,
+      team_state: t.team_state || null,
+      entry_status: t.entry_status || null,
+      payment_status: t.payment_status || null,
+      status: t.entry_status || null,
+      region: t.region || null,
+      director: t.director || null,
+      created_at: new Date().toISOString(),
+    }))),
   });
-  // Ignore duplicate errors (409) since entries accumulate
-  if (!resp.ok && resp.status !== 409) {
-    const text = await resp.text();
-    throw new Error(`Insert entries failed: ${resp.status} - ${text}`);
-  }
+  if (!resp.ok && resp.status !== 409) throw new Error(`Insert failed: ${resp.status}`);
+  return newTeams.length;
 }
 
-async function logPoll(env, status, eventsCount, entriesCount, errorMessage, durationMs) {
+async function logPoll(env, status, count, errorMsg, durationMs) {
   try {
     await fetch(`${env.SUPABASE_URL}/rest/v1/usssa_poll_log`, {
       method: 'POST',
@@ -339,13 +388,10 @@ async function logPoll(env, status, eventsCount, entriesCount, errorMessage, dur
       },
       body: JSON.stringify({
         status,
-        events_count: eventsCount,
-        entries_count: entriesCount,
-        error_message: errorMessage || null,
+        registrations_count: count,
+        error_message: errorMsg || null,
         duration_ms: durationMs,
       }),
     });
-  } catch (e) {
-    console.error('Failed to log poll:', e);
-  }
+  } catch {}
 }
