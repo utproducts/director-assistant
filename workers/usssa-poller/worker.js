@@ -296,15 +296,16 @@ async function pollUSSSA(env) {
 // — USSSA API helpers —————————————————————————————————————————————————————————
 
 async function fetchUSSSATeams(cookieStr, divisionId) {
+  // Correct endpoint: divisionTeamsTable with divisionIDs (string, not array)
   const payload = `json=${encodeURIComponent(JSON.stringify({
-    rows: 100, filter: { divisionID: divisionId, sportID: 11 }
+    page: 1, rows: 200, sort: {}, filter: { divisionIDs: String(divisionId) }
   }))}`;
-  const resp = await fetch(`${USSSA_API}?action=teamsTable`, {
+  const resp = await fetch(`${USSSA_API}?action=divisionTeamsTable`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
       'Cookie': cookieStr,
-      'User-Agent': 'Mozilla/5.0',
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
       'X-Requested-With': 'XMLHttpRequest',
     },
     body: payload,
@@ -316,22 +317,27 @@ async function fetchUSSSATeams(cookieStr, divisionId) {
 function parseTeamsResponse(responseText, event, division) {
   try {
     const parsed = JSON.parse(responseText);
-    return (parsed.data || []).map(t => ({
-      event_id: event.event_id,
-      event_name: event.event_name,
-      event_date: event.start_date,
-      division: division.division_name,
-      team_name: (t.teamName || '').toString().trim(),
-      manager_name: (t.managerName || '').toString().trim(),
-      manager_email: (t.managerEmail || '').toString().trim(),
-      manager_phone: (t.managerPhone || '').toString().trim(),
-      team_city: (t.city || '').toString().trim(),
-      team_state: (t.state || '').toString().trim(),
-      entry_status: (t.entryStatus || '').toString().trim(),
-      payment_status: (t.paymentStatus || '').toString().trim(),
-      region: event.region,
-      director: event.director,
-    })).filter(t => t.team_name);
+    if (!parsed.status || !parsed.data) return [];
+    return parsed.data.map(t => {
+      // manager field format: "Name|email|phone"
+      const [mgr_name, mgr_email, mgr_phone] = (t.manager || '').split('|');
+      return {
+        event_id: event.event_id,
+        event_name: event.event_name,
+        event_date: event.start_date,
+        division: division.division_name,
+        team_name: (t.teamName || '').toString().trim(),
+        manager_name: (mgr_name || '').trim(),
+        manager_email: (mgr_email || '').trim(),
+        manager_phone: (mgr_phone || '').trim(),
+        team_city: (t.city || '').toString().trim(),
+        team_state: (t.state || '').toString().trim(),
+        entry_status: (t.entryStatus || '').toString().trim(),
+        payment_status: (t.paymentStatus || '').toString().trim(),
+        region: event.region,
+        director: event.director,
+      };
+    }).filter(t => t.team_name);
   } catch {
     return [];
   }
