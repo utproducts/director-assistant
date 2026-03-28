@@ -213,7 +213,12 @@ async function getStatus(env) {
   return { recentPolls: res, workerActive: true };
 }
 
-// — FIXED pollUSSSA: iterates TARGET_EVENT_IDS directly, batch of 7 per cycle —
+// — pollUSSSA: iterates TARGET_EVENT_IDS directly, batch of 2 per cycle —
+// Subrequest budget per invocation (limit = 50):
+//   1  getCookieStr
+//   per event (×2): 1 fetchDivisions + N fetchTeams (parallel) + 1 precheck + 1 insert = N+3
+//   1  logPoll
+// Total: 2 + 2*(N+3) = 2N+8  →  for N=20 divs: 48 — safely under 50
 async function pollUSSSA(env) {
   const startTime = Date.now();
   let registrationsCount = 0;
@@ -222,9 +227,9 @@ async function pollUSSSA(env) {
   try {
     const cookieStr = await getCookieStr(env);
 
-    // Pick a batch of 7 event IDs based on the current 10-minute cycle index.
-    // This covers all 63 events across 9 cycles (~90 minutes total coverage).
-    const BATCH_SIZE = 7;
+    // Pick a batch of 2 event IDs based on the current 10-minute cycle index.
+    // Covers all 63 events across ~32 cycles (~5.3 hours total).
+    const BATCH_SIZE = 2;
     const cycleIndex = Math.floor(Date.now() / 600000);
     const startIdx = (cycleIndex * BATCH_SIZE) % TARGET_EVENT_IDS.length;
     const eventIdBatch = [];
@@ -237,30 +242,35 @@ async function pollUSSSA(env) {
         const divisions = await fetchDivisionsForEvent(cookieStr, eventId);
         if (divisions.length === 0) continue;
 
-        for (const division of divisions) {
-          try {
-            const teamsResp = await fetchUSSSATeams(cookieStr, parseInt(division.divID));
-            const event = {
-              event_id: String(eventId),
-              event_name: `Event ${eventId}`,
-              start_date: '',
-              region: 'UNKNOWN',
-              director: '',
-            };
-            const teams = parseTeamsResponse(teamsResp, event, {
-              division_id: division.divID,
-              division_name: division.ageCode,
-            });
-            if (teams.length > 0) {
-              const inserted = await insertNewRegistrations(env, teams, event, {
+        const event = {
+          event_id: String(eventId),
+          event_name: `Event ${eventId}`,
+          start_date: '',
+          region: 'UNKNOWN',
+          director: '',
+        };
+
+        // Fetch ALL division teams in parallel — one subrequest per division
+        const teamArrays = await Promise.all(
+          divisions.map(async (division) => {
+            try {
+              const teamsResp = await fetchUSSSATeams(cookieStr, parseInt(division.divID));
+              return parseTeamsResponse(teamsResp, event, {
                 division_id: division.divID,
                 division_name: division.ageCode,
               });
-              registrationsCount += inserted;
+            } catch (e) {
+              errors.push(`Div ${division.divID}: ${e.message}`);
+              return [];
             }
-          } catch (e) {
-            errors.push(`Teams div ${division.divID}: ${e.message}`);
-          }
+          })
+        );
+
+        // Combine all divisions into one array, then do ONE precheck + ONE insert per event
+        const allTeams = teamArrays.flat();
+        if (allTeams.length > 0) {
+          const inserted = await insertNewRegistrations(env, allTeams, event);
+          registrationsCount += inserted;
         }
       } catch (e) {
         errors.push(`Event ${eventId}: ${e.message}`);
