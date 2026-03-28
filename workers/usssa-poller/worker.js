@@ -357,24 +357,20 @@ async function supabaseQuery(env, table, query) {
   return await resp.json();
 }
 
-async function insertNewRegistrations(env, teams, event, division) {
+async function insertNewRegistrations(env, teams, event) {
   if (teams.length === 0) return 0;
-  const existing = await supabaseQuery(env, 'usssa_registrations',
-    `select=id,team_name,event_id&event_id=eq.${event.event_id}&team_name=in.(${teams.map(t => `"${t.team_name.replace(/"/g, '\\"')}`).join(',')})`
-  );
-  const existingSet = new Set(existing.map(t => `${t.event_id}:${t.team_name}`));
-  const newTeams = teams.filter(t => !existingSet.has(`${event.event_id}:${t.team_name}`));
-  if (newTeams.length === 0) return 0;
 
+  // Use upsert with ignore-duplicates — no precheck needed, saves a subrequest
+  // Requires a unique constraint on (event_id, team_name, division) in the table
   const resp = await fetch(`${env.SUPABASE_URL}/rest/v1/usssa_registrations`, {
     method: 'POST',
     headers: {
       'apikey': env.SUPABASE_SERVICE_KEY,
       'Authorization': `Bearer ${env.SUPABASE_SERVICE_KEY}`,
       'Content-Type': 'application/json',
-      'Prefer': 'return=minimal',
+      'Prefer': 'resolution=ignore-duplicates,return=minimal',
     },
-    body: JSON.stringify(newTeams.map(t => ({
+    body: JSON.stringify(teams.map(t => ({
       event_id: t.event_id,
       tournament: t.event_name,
       start_date: t.event_date || null,
@@ -393,8 +389,8 @@ async function insertNewRegistrations(env, teams, event, division) {
       created_at: new Date().toISOString(),
     }))),
   });
-  if (!resp.ok && resp.status !== 409) throw new Error(`Insert failed: ${resp.status}`);
-  return newTeams.length;
+  if (!resp.ok) throw new Error(`Insert failed: ${resp.status}`);
+  return teams.length;
 }
 
 async function logPoll(env, status, count, errorMsg, durationMs) {
