@@ -260,7 +260,7 @@ async function pollUSSSA(env) {
                 division_id: division.divID,
                 division_name: division.ageCode,
               });
-              debug.push(`Div ${division.divID}(${division.ageCode}): raw=${teamsResp?.length ?? 'null'} parsed=${teams.length}`);
+              debug.push(`Div ${division.divID}(${division.ageCode}): raw="${(teamsResp||'').slice(0,80)}" parsed=${teams.length}`);
               return teams;
             } catch (e) {
               errors.push(`Div ${division.divID}: ${e.message}`);
