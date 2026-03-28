@@ -126,6 +126,23 @@ export default {
       }
     }
 
+    // — GET /event-teams ——————————————————————————————————————————————————————
+    if (url.pathname === '/event-teams') {
+      try {
+        const eventId = url.searchParams.get('event_id') || '';
+        if (!eventId) return new Response(JSON.stringify({ status: 'error', message: 'event_id param required' }), { status: 400, headers: CORS_HEADERS });
+        const qs = 'select=team_name,team_city,team_state,manager_name,manager_email,manager_phone,division,entry_status,payment_status&event_id=eq.' + encodeURIComponent(eventId) + '&order=division.asc,team_name.asc&limit=1000';
+        const resp = await fetch(env.SUPABASE_URL + '/rest/v1/usssa_registrations?' + qs, {
+          headers: { 'apikey': env.SUPABASE_SERVICE_KEY, 'Authorization': 'Bearer ' + env.SUPABASE_SERVICE_KEY, 'Content-Type': 'application/json' }
+        });
+        if (!resp.ok) throw new Error('Supabase ' + resp.status + ': ' + await resp.text());
+        const teams = await resp.json();
+        return new Response(JSON.stringify({ status: 'ok', count: teams.length, teams }), { headers: CORS_HEADERS });
+      } catch (e) {
+        return new Response(JSON.stringify({ status: 'error', message: e.message }), { status: 500, headers: CORS_HEADERS });
+      }
+    }
+
     // — Existing endpoints ————————————————————————————————————————————————————
     if (url.pathname === '/poll') {
       const result = await pollUSSSA(env);
