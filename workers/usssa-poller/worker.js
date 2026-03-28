@@ -223,6 +223,7 @@ async function pollUSSSA(env) {
   const startTime = Date.now();
   let registrationsCount = 0;
   let errors = [];
+  let debug = [];
 
   try {
     const cookieStr = await getCookieStr(env);
@@ -255,10 +256,12 @@ async function pollUSSSA(env) {
           divisions.map(async (division) => {
             try {
               const teamsResp = await fetchUSSSATeams(cookieStr, parseInt(division.divID));
-              return parseTeamsResponse(teamsResp, event, {
+              const teams = parseTeamsResponse(teamsResp, event, {
                 division_id: division.divID,
                 division_name: division.ageCode,
               });
+              debug.push(`Div ${division.divID}(${division.ageCode}): raw=${teamsResp?.length ?? 'null'} parsed=${teams.length}`);
+              return teams;
             } catch (e) {
               errors.push(`Div ${division.divID}: ${e.message}`);
               return [];
@@ -268,6 +271,7 @@ async function pollUSSSA(env) {
 
         // Combine all divisions into one array, then do ONE precheck + ONE insert per event
         const allTeams = teamArrays.flat();
+        debug.push(`Event ${eventId}: ${divisions.length} divs, ${allTeams.length} total teams`);
         if (allTeams.length > 0) {
           const inserted = await insertNewRegistrations(env, allTeams, event);
           registrationsCount += inserted;
@@ -280,7 +284,7 @@ async function pollUSSSA(env) {
     const status = errors.length === 0 ? 'success' : 'partial';
     const duration = Date.now() - startTime;
     await logPoll(env, status, registrationsCount, errors.join('; '), duration);
-    return { status, registrationsCount, eventsBatch: eventIdBatch, errors, durationMs: duration };
+    return { status, registrationsCount, eventsBatch: eventIdBatch, errors, debug, durationMs: duration };
 
   } catch (e) {
     const duration = Date.now() - startTime;
