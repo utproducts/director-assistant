@@ -109,7 +109,9 @@ export default {
         const age = url.searchParams.get('age') || '';
         const state = url.searchParams.get('state') || '';
         if (!age) return new Response(JSON.stringify({ status: 'error', message: 'age param required' }), { status: 400, headers: CORS_HEADERS });
-        let qs = 'select=team_name,team_city,team_state,manager_name,manager_email,manager_phone,division,entry_status,payment_status&division=ilike.' + encodeURIComponent('%' + age + '%') + '&order=team_name.asc&limit=400';
+        // Strip trailing "U" so "14U" → "14", matching "14Op", "14AA", "14AAA" etc.
+        const agePrefix = age.replace(/U$/i, '');
+        let qs = 'select=team_name,team_city,team_state,manager_name,manager_email,manager_phone,division,entry_status,payment_status&division=ilike.' + encodeURIComponent('%' + agePrefix + '%') + '&order=team_name.asc&limit=400';
         if (state && state !== 'all') qs += '&team_state=eq.' + encodeURIComponent(state);
         const resp = await fetch(env.SUPABASE_URL + '/rest/v1/usssa_registrations?' + qs, {
           headers: { 'apikey': env.SUPABASE_SERVICE_KEY, 'Authorization': 'Bearer ' + env.SUPABASE_SERVICE_KEY, 'Content-Type': 'application/json' }
