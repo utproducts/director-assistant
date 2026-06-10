@@ -2227,7 +2227,15 @@
         <div class="card" style="padding:0; overflow:hidden;">
           <div style="padding:16px 20px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
             <h3 style="font-size:16px; font-weight:600;">Events</h3>
-            <div style="display:flex; gap:8px;">
+            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+              <select id="ecSportFilter" onchange="loadECEvents()" style="padding:6px 12px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--navy-light); font-size:13px; color:var(--text-primary);">
+                <option value="">All Sports</option>
+                <option value="baseball">Baseball</option>
+                <option value="fastpitch">Fastpitch</option>
+              </select>
+              <select id="ecStateFilter" onchange="loadECEvents()" style="padding:6px 12px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--navy-light); font-size:13px; color:var(--text-primary);">
+                <option value="">All States</option>
+              </select>
               <select id="ecStatusFilter" onchange="loadECEvents()" style="padding:6px 12px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--navy-light); font-size:13px; color:var(--text-primary);">
                 <option value="all">All Events</option>
                 <option value="upcoming">Upcoming</option>
@@ -7559,6 +7567,29 @@ async function saveBcastTemplate() {
     
     const EC_PRICE_PER_GAME = 5;
     
+    // Derive a 2-letter state for an event. Uses ec_events.state if present,
+    // otherwise parses it out of the venue/location string (e.g. "..., Melbourne, FL, 32940").
+    function eventState(e) {
+      if (e.state) return String(e.state).toUpperCase();
+      const v = (e.venue || e.location || e.address || '') + '';
+      let m = v.match(/,\s*([A-Za-z]{2})\s*,?\s*\d{5}/);   // ", FL, 32940"
+      if (!m) m = v.match(/,\s*([A-Za-z]{2})\s*$/);          // ends with ", FL"
+      return m ? m[1].toUpperCase() : '';
+    }
+    function eventSport(e) {
+      return (e.sport || 'baseball').toString().toLowerCase();
+    }
+    // Fill the State dropdown from the events we have, preserving the current selection.
+    function populateEcStateFilter(events) {
+      const sel = document.getElementById('ecStateFilter');
+      if (!sel) return;
+      const current = sel.value;
+      const states = [...new Set((events || []).map(eventState).filter(Boolean))].sort();
+      sel.innerHTML = '<option value="">All States</option>' +
+        states.map(s => `<option value="${s}">${s}</option>`).join('');
+      if (states.includes(current)) sel.value = current;
+    }
+
     async function loadECEvents() {
       const filter = document.getElementById('ecStatusFilter')?.value || 'all';
       const today = new Date().toISOString().split('T')[0];
@@ -7569,13 +7600,21 @@ async function saveBcastTemplate() {
       else if (filter === 'upcoming') query = query.gt('start_date', today);
       else if (filter === 'past') query = query.lt('end_date', today);
       
-      const { data: events, error } = await query;
+      const { data: rawEvents, error } = await query;
       if (error) { console.error('EC load error:', error); return; }
-      
-      // Update counts
+
+      // Populate the State dropdown from what's available, then apply State + Sport filters
+      populateEcStateFilter(rawEvents);
+      const stateF = document.getElementById('ecStateFilter')?.value || '';
+      const sportF = document.getElementById('ecSportFilter')?.value || '';
+      let events = rawEvents || [];
+      if (stateF) events = events.filter(e => eventState(e) === stateF);
+      if (sportF) events = events.filter(e => eventSport(e) === sportF);
+
+      // Update counts (reflect the filtered set)
       document.getElementById('ecTotalEvents').textContent = events?.length || 0;
       document.getElementById('ecEventCount').textContent = events?.length || 0;
-      
+
       let totalGames = 0, totalRevenue = 0, outstanding = 0;
       events?.forEach(e => {
         totalGames += e.game_count || 0;
@@ -7590,7 +7629,9 @@ async function saveBcastTemplate() {
       
       const container = document.getElementById('ecEventsList');
       if (!events || events.length === 0) {
-        container.innerHTML = '<div style="padding:40px; text-align:center; color:var(--text-muted);">No events yet. Click "New Event" to get started!</div>';
+        const anyFilter = stateF || sportF || (filter && filter !== 'all');
+        container.innerHTML = '<div style="padding:40px; text-align:center; color:var(--text-muted);">' +
+          (anyFilter ? 'No events match these filters.' : 'No events yet. Click "New Event" to get started!') + '</div>';
         return;
       }
 
