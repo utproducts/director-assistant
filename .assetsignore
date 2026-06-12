@@ -1,0 +1,7 @@
+.git
+.gitignore
+.assetsignore
+.wrangler
+node_modules
+supabase
+workers
