@@ -6700,16 +6700,6 @@ ${ebBlocks.map(b => ebRenderBlock(b)).join('\n')}
     function previewEmail() { ebPreviewFull(); }
     function sendEmailCampaign() { ebSendCampaign(); }
 
-    // ===== SETTINGS =====
-      currentEmailCampaignId = null;
-      document.getElementById('emailCampaignList').style.display = 'none';
-      document.getElementById('emailEditorPanel').style.display = 'block';
-      document.getElementById('emailCampName').value = '';
-      document.getElementById('emailCampSubject').value = 'USSSA 2026 Season - Stat Tracking for {{team_name}}';
-      updateEmailPreview();
-      updateEmailRecipientCount();
-    }
-
     function backToCampaignList() {
       document.getElementById('emailCampaignList').style.display = 'block';
       document.getElementById('emailEditorPanel').style.display = 'none';
