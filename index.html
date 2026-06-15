@@ -3196,8 +3196,13 @@ This is a one-time submission — your link will be used for all events this sea
         <!-- Filters -->
         <div class="card" style="padding:16px 20px; margin-bottom:16px;">
           <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:center;">
-            <select id="tmLocationFilter" onchange="tmOnLocationChange()" style="padding:10px 14px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--navy); font-size:13px; color:var(--text-primary);">
-              <option value="">All Locations</option>
+            <select id="tmStateFilter" onchange="tmOnScopeChange()" style="padding:10px 14px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--navy); font-size:13px; color:var(--text-primary);">
+              <option value="">All States</option>
+            </select>
+            <select id="tmSportFilter" onchange="tmOnScopeChange()" style="padding:10px 14px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--navy); font-size:13px; color:var(--text-primary);">
+              <option value="">All Sports</option>
+              <option value="baseball">Baseball</option>
+              <option value="fastpitch">Fastpitch</option>
             </select>
             <select id="tmEventFilter" onchange="tmFilterTeams()" style="padding:10px 14px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--navy); font-size:13px; color:var(--text-primary); min-width:180px;">
               <option value="">-- Select Event --</option>
@@ -3205,7 +3210,7 @@ This is a one-time submission — your link will be used for all events this sea
             <select id="tmAgeFilter" onchange="tmFilterTeams()" style="padding:10px 14px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--navy); font-size:13px; color:var(--text-primary);">
               <option value="">All Ages</option>
             </select>
-            <input type="text" id="tmSearchInput" placeholder="Search teams..." oninput="tmFilterTeams()" style="flex:1; min-width:200px; padding:10px 14px; background:var(--navy); border:1px solid var(--border); border-radius:20px; color:var(--text-primary); font-family:'DM Sans',sans-serif; font-size:13px;">
+            <input type="text" id="tmSearchInput" placeholder="Search all teams by name…" oninput="tmFilterTeams()" style="flex:1; min-width:200px; padding:10px 14px; background:var(--navy); border:1px solid var(--border); border-radius:20px; color:var(--text-primary); font-family:'DM Sans',sans-serif; font-size:13px;">
           </div>
         </div>
 
@@ -9422,7 +9427,8 @@ async function addNewUser() {
       if (loading) loading.style.display = 'block';
 
       // Preserve current filter selections across reload
-      const prevLocation = document.getElementById('tmLocationFilter')?.value || '';
+      const prevState = document.getElementById('tmStateFilter')?.value || '';
+      const prevSport = document.getElementById('tmSportFilter')?.value || '';
       const prevEvent = document.getElementById('tmEventFilter')?.value || '';
       const prevAge = document.getElementById('tmAgeFilter')?.value || '';
 
@@ -9433,7 +9439,7 @@ async function addNewUser() {
       const { data: players } = await sb.from('ec_players').select('id, team_id');
 
       // Fetch events and event-team links
-      const { data: events } = await sb.from('ec_events').select('id, name, event_name, venue, start_date, end_date').order('start_date', { ascending: false });
+      const { data: events } = await sb.from('ec_events').select('*').order('start_date', { ascending: false });
       tmAllEvents = events || [];
       const { data: etLinks } = await sb.from('ec_event_teams').select('event_id, team_id');
       tmEventTeamLinks = etLinks || [];
@@ -9448,19 +9454,20 @@ async function addNewUser() {
       }
       for (const p of (players || [])) { if (tmTeamStats[p.team_id]) tmTeamStats[p.team_id].players++; }
 
-      // Populate Location filter from unique venues
-      const venues = [...new Set(tmAllEvents.map(e => e.venue).filter(Boolean))].sort();
-      document.getElementById('tmLocationFilter').innerHTML = '<option value="">All Locations</option>' + venues.map(v => `<option value="${v}">${esc(v)}</option>`).join('');
+      // Populate State filter from event states (derived from the event venue address)
+      const states = [...new Set(tmAllEvents.map(eventState).filter(Boolean))].sort();
+      document.getElementById('tmStateFilter').innerHTML = '<option value="">All States</option>' + states.map(s => `<option value="${s}">${esc(s)}</option>`).join('');
 
       // Populate Age filter
       const ages = [...new Set(tmAllTeams.map(t => t.age_group).filter(Boolean))].sort((a, b) => parseInt(a) - parseInt(b));
       document.getElementById('tmAgeFilter').innerHTML = '<option value="">All Ages</option>' + ages.map(a => `<option value="${a}">${a}</option>`).join('');
 
-      // Populate Event filter (respecting location selection)
-      tmPopulateEventFilter(prevLocation);
+      // Populate Event filter (respecting state + sport selection)
+      tmPopulateEventFilter(prevState, prevSport);
 
       // Restore filter selections
-      if (prevLocation) document.getElementById('tmLocationFilter').value = prevLocation;
+      if (prevState) document.getElementById('tmStateFilter').value = prevState;
+      if (prevSport) document.getElementById('tmSportFilter').value = prevSport;
       if (prevEvent) document.getElementById('tmEventFilter').value = prevEvent;
       if (prevAge) document.getElementById('tmAgeFilter').value = prevAge;
 
@@ -9475,9 +9482,10 @@ async function addNewUser() {
       tmFilterTeams();
     }
 
-    function tmPopulateEventFilter(locationFilter) {
+    function tmPopulateEventFilter(stateFilter, sportFilter) {
       let events = tmAllEvents;
-      if (locationFilter) events = events.filter(e => e.venue === locationFilter);
+      if (stateFilter) events = events.filter(e => eventState(e) === stateFilter);
+      if (sportFilter) events = events.filter(e => eventSport(e) === sportFilter);
       const sel = document.getElementById('tmEventFilter');
       const prev = sel.value;
       sel.innerHTML = '<option value="">-- Select Event --</option>' + events.map(e => {
@@ -9489,9 +9497,10 @@ async function addNewUser() {
       if (prev && [...sel.options].some(o => o.value === prev)) sel.value = prev;
     }
 
-    function tmOnLocationChange() {
-      const loc = document.getElementById('tmLocationFilter').value;
-      tmPopulateEventFilter(loc);
+    function tmOnScopeChange() {
+      const state = document.getElementById('tmStateFilter').value;
+      const sport = document.getElementById('tmSportFilter').value;
+      tmPopulateEventFilter(state, sport);
       document.getElementById('tmEventFilter').value = '';
       tmFilterTeams();
     }
@@ -9502,33 +9511,38 @@ async function addNewUser() {
       const ageFilter = document.getElementById('tmAgeFilter')?.value || '';
       const tbody = document.getElementById('tmTeamRows');
 
-      // Require event selection before showing teams
-      if (!eventFilter) {
-        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:40px; color:var(--text-muted);">Select an event above to view teams</td></tr>';
+      let filtered;
+      if (eventFilter) {
+        // Teams registered for (or with games in) the selected event
+        const eventTeamIds = new Set(tmEventTeamLinks.filter(et => et.event_id === eventFilter).map(et => et.team_id).filter(Boolean));
+        const selectedEvent = tmAllEvents.find(e => e.id === eventFilter);
+        const selectedEventName = selectedEvent ? (selectedEvent.name || selectedEvent.event_name) : null;
+        for (const t of tmAllTeams) {
+          const s = tmTeamStats[t.id];
+          if (s && (s.eventIds.has(eventFilter) || (selectedEventName && s.events.has(selectedEventName)))) {
+            eventTeamIds.add(t.id);
+          }
+        }
+        filtered = tmAllTeams.filter(t => {
+          if (!eventTeamIds.has(t.id)) return false;
+          if (search && !t.team_name.toLowerCase().includes(search)) return false;
+          if (ageFilter && t.age_group !== ageFilter) return false;
+          return true;
+        });
+      } else if (search) {
+        // Global team search — no event required, looks across ALL teams by name
+        filtered = tmAllTeams.filter(t => {
+          if (!t.team_name || !t.team_name.toLowerCase().includes(search)) return false;
+          if (ageFilter && t.age_group !== ageFilter) return false;
+          return true;
+        });
+      } else {
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:40px; color:var(--text-muted);">Pick an event above, or type in the search box to find any team by name.</td></tr>';
         return;
       }
 
-      // Build set of team IDs in the selected event
-      const eventTeamIds = new Set(tmEventTeamLinks.filter(et => et.event_id === eventFilter).map(et => et.team_id).filter(Boolean));
-      // Also include teams with games in this event (by event_id or event_name)
-      const selectedEvent = tmAllEvents.find(e => e.id === eventFilter);
-      const selectedEventName = selectedEvent ? (selectedEvent.name || selectedEvent.event_name) : null;
-      for (const t of tmAllTeams) {
-        const s = tmTeamStats[t.id];
-        if (s && (s.eventIds.has(eventFilter) || (selectedEventName && s.events.has(selectedEventName)))) {
-          eventTeamIds.add(t.id);
-        }
-      }
-
-      const filtered = tmAllTeams.filter(t => {
-        if (!eventTeamIds.has(t.id)) return false;
-        if (search && !t.team_name.toLowerCase().includes(search)) return false;
-        if (ageFilter && t.age_group !== ageFilter) return false;
-        return true;
-      });
-
       if (filtered.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:40px; color:var(--text-muted);">No teams found for this event</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:40px; color:var(--text-muted);">No teams found.</td></tr>';
         return;
       }
 
