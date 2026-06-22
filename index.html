@@ -2260,9 +2260,9 @@
             <input type="hidden" id="editEventId" value="">
 
             <div style="margin-bottom:16px; padding:14px 16px; background:var(--navy-mid); border-radius:var(--radius-sm); border:1px dashed var(--border);">
-              <label style="display:block; font-size:13px; font-weight:600; margin-bottom:6px; color:var(--text-secondary);">USSSA Event URL <span style="font-weight:400; color:var(--text-muted);">(auto-fill form)</span></label>
+              <label style="display:block; font-size:13px; font-weight:600; margin-bottom:6px; color:var(--text-secondary);">USSSA Event URL or Event ID <span style="font-weight:400; color:var(--text-muted);">(auto-fills form + imports Who's Coming teams)</span></label>
               <div style="display:flex; gap:8px;">
-                <input id="ecUsssaUrl" type="text" placeholder="https://flbaseball.usssa.com/event/..." style="flex:1; padding:10px 14px; border:1px solid var(--border); border-radius:var(--radius-sm); font-size:14px; background:var(--white);">
+                <input id="ecUsssaUrl" type="text" placeholder="Event ID (e.g. 411010) or https://www.usssa.com/baseball/event_home/?eventID=..." style="flex:1; padding:10px 14px; border:1px solid var(--border); border-radius:var(--radius-sm); font-size:14px; background:var(--white);">
                 <button id="ecFetchBtn" onclick="fetchUsssaEventInfo()" class="btn btn-primary" style="white-space:nowrap; padding:10px 16px; font-size:13px;">Fetch Event Info</button>
               </div>
             </div>
@@ -7952,6 +7952,8 @@ async function saveBcastTemplate() {
           if (t.division_class) extFields.division_class = t.division_class;
           if (t.date_of_entry) extFields.date_of_entry = t.date_of_entry;
           if (t.dc_division_id) extFields.dc_division_id = t.dc_division_id;
+          if (t.usssa_team_id) extFields.usssa_team_id = t.usssa_team_id;
+          if (t.overall_record) extFields.overall_record = t.overall_record;
           if (Object.keys(extFields).length > 0) {
             var { error: extErr } = await sb.from('ec_teams').update(extFields).eq('id', team.id);
             if (extErr) console.warn('⚠️ Extended fields update skipped for "' + t.team_name + '":', extErr.message);
@@ -8258,8 +8260,9 @@ async function saveBcastTemplate() {
     }
 
 async function fetchUsssaEventInfo() {
-      const url = document.getElementById('ecUsssaUrl').value.trim();
-      if (!url) { showToast('Paste a USSSA event URL first'); return; }
+      const input = document.getElementById('ecUsssaUrl').value.trim();
+      if (!input) { showToast('Paste a USSSA event URL or Event ID first'); return; }
+      const isId = /^\d+$/.test(input);
       const btn = document.getElementById('ecFetchBtn');
       btn.disabled = true;
       btn.textContent = 'Fetching...';
@@ -8267,7 +8270,7 @@ async function fetchUsssaEventInfo() {
         const res = await fetch(API_BASE + '/api/ec/fetch-event-info', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url }),
+          body: JSON.stringify(isId ? { eventID: input } : { url: input }),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Fetch failed');
@@ -8293,7 +8296,29 @@ async function fetchUsssaEventInfo() {
         if (data.endDate) {
           document.getElementById('ecSyncStop').value = data.endDate.slice(0, 10) + 'T22:00';
         }
-        showToast('Event info loaded — review and save');
+        // Queue the "Who's Coming" registered teams for import. They're mapped into the same
+        // shape the roster importer (createTeamsFromRoster) uses, so saving the event auto-imports
+        // them into ec_teams + ec_event_teams. Coaches' phone/email arrive later via GC-link requests.
+        if (Array.isArray(data.teams) && data.teams.length) {
+          pendingRosterTeams = data.teams.map(function(t) {
+            return {
+              team_name: t.teamName,
+              coach_name: t.manager || '',
+              coach_phone: '',
+              coach_email: '',
+              age_group: t.ageGroup || '',
+              city: t.city || '',
+              state: t.state || '',
+              team_class: t.teamClass || '',
+              division_class: t.divisionClass || '',
+              usssa_team_id: t.usssaTeamId || null,
+              overall_record: t.overallRecord || ''
+            };
+          });
+          showToast('Event info loaded — ' + pendingRosterTeams.length + ' registered teams will import on Save');
+        } else {
+          showToast('Event info loaded — review and save');
+        }
       } catch (err) {
         showToast('Error: ' + err.message);
       } finally {
