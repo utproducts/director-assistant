@@ -7748,7 +7748,32 @@ async function saveBcastTemplate() {
     // ROSTER UPLOAD (XLSX/CSV)
     // ═══════════════════════════════════════════════════════
     var pendingRosterTeams = [];
-    
+
+    // Merge helper: combine team lists (USSSA Who's Coming + uploaded roster) without losing
+    // either. Match on normalized team name (+ age when both have it); fill only EMPTY fields so
+    // USSSA data (usssa_team_id, division) and uploaded contacts (phone/email) coexist regardless
+    // of which arrived first. Unmatched incoming teams are appended.
+    function normTeamName(s) { return String(s || '').toLowerCase().replace(/[^a-z0-9]/g, ''); }
+    function mergeRosterTeams(base, incoming) {
+      var out = (base || []).slice();
+      (incoming || []).forEach(function(t) {
+        var match = out.find(function(e) {
+          if (normTeamName(e.team_name) !== normTeamName(t.team_name)) return false;
+          if (e.age_group && t.age_group && e.age_group !== t.age_group) return false;
+          return true;
+        });
+        if (match) {
+          Object.keys(t).forEach(function(k) {
+            var cur = match[k];
+            if ((cur === undefined || cur === null || cur === '') && t[k] != null && t[k] !== '') match[k] = t[k];
+          });
+        } else {
+          out.push(t);
+        }
+      });
+      return out;
+    }
+
     function previewRosterUpload(event) {
       var file = event.target.files[0];
       if (!file) return;
@@ -7794,8 +7819,10 @@ async function saveBcastTemplate() {
             return;
           }
 
-          // Parse teams
-          pendingRosterTeams = [];
+          // Parse teams into a local list, then MERGE into any already-queued teams
+          // (e.g. teams auto-imported from USSSA Who's Coming) so an upload adds contacts
+          // instead of wiping the auto-imported list.
+          var parsed = [];
           for (var r = headerRow + 1; r < data.length; r++) {
             var row = data[r];
             var name = String(row[colMap.team_name] || '').trim();
@@ -7817,7 +7844,7 @@ async function saveBcastTemplate() {
               ageGroup = String(row[colMap.age_group] || '').trim();
             }
 
-            pendingRosterTeams.push({
+            parsed.push({
               team_name: name,
               age_group: ageGroup,
               team_class: colMap.team_class !== undefined ? String(row[colMap.team_class] || '').trim() : '',
@@ -7831,7 +7858,8 @@ async function saveBcastTemplate() {
               state: colMap.state !== undefined ? String(row[colMap.state] || '').trim() : ''
             });
           }
-          
+          pendingRosterTeams = mergeRosterTeams(pendingRosterTeams, parsed);
+
           // Show preview
           var preview = document.getElementById('ecRosterPreview');
           preview.style.display = 'block';
@@ -7858,7 +7886,7 @@ async function saveBcastTemplate() {
           html += '<div style="font-size:11px; color:var(--text-muted); margin-top:8px;">Teams will be created when you save the event.</div></div>';
           preview.innerHTML = html;
           
-          showToast('✅ ' + pendingRosterTeams.length + ' teams parsed from ' + file.name);
+          showToast('✅ ' + parsed.length + ' teams parsed from ' + file.name + ' — ' + pendingRosterTeams.length + ' total queued');
           
         } catch (err) {
           showToast('❌ Error parsing file: ' + err.message);
@@ -8300,7 +8328,7 @@ async function fetchUsssaEventInfo() {
         // shape the roster importer (createTeamsFromRoster) uses, so saving the event auto-imports
         // them into ec_teams + ec_event_teams. Coaches' phone/email arrive later via GC-link requests.
         if (Array.isArray(data.teams) && data.teams.length) {
-          pendingRosterTeams = data.teams.map(function(t) {
+          var usssaTeams = data.teams.map(function(t) {
             return {
               team_name: t.teamName,
               coach_name: t.manager || '',
@@ -8315,7 +8343,9 @@ async function fetchUsssaEventInfo() {
               overall_record: t.overallRecord || ''
             };
           });
-          showToast('Event info loaded — ' + pendingRosterTeams.length + ' registered teams will import on Save');
+          // Merge so a previously uploaded roster (with coach contacts) is preserved/enriched.
+          pendingRosterTeams = mergeRosterTeams(pendingRosterTeams, usssaTeams);
+          showToast('Event info loaded — ' + usssaTeams.length + ' registered teams queued (' + pendingRosterTeams.length + ' total) for import on Save');
         } else {
           showToast('Event info loaded — review and save');
         }
