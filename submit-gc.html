@@ -61,15 +61,15 @@
           <p class="hint">Easiest: on your GameChanger team page tap the <b>⋮</b> menu and copy the <b>Team ID</b>. Or paste the full team link.</p>
         </div>
         <div class="row">
-          <label for="coachName">Manager / Coach Name <span class="optional">(optional)</span></label>
-          <input id="coachName" type="text" autocomplete="off">
+          <label for="coachName">Manager / Coach Full Name <span style="color:var(--red)">*</span></label>
+          <input id="coachName" type="text" placeholder="First and last name" autocomplete="off">
         </div>
         <div class="row">
-          <label for="coachEmail">Email <span class="optional">(optional)</span></label>
+          <label for="coachEmail">Email <span style="color:var(--red)">*</span></label>
           <input id="coachEmail" type="email" autocomplete="off">
         </div>
         <div class="row">
-          <label for="coachPhone">Phone <span class="optional">(optional)</span></label>
+          <label for="coachPhone">Cell Phone <span style="color:var(--red)">*</span></label>
           <input id="coachPhone" type="tel" autocomplete="off">
         </div>
         <button class="btn" id="submitBtn" onclick="submitGc()">Submit GameChanger Link</button>
@@ -121,6 +121,12 @@
     var gc = (document.getElementById('gcUrl').value||'').trim();
     var okGc = /gc\.com\/teams\/[A-Za-z0-9_-]+/i.test(gc) || /^[A-Za-z0-9_-]{6,}$/.test(gc);
     if(!okGc){ err('submitErr','Enter your GameChanger team link or Team ID (e.g. UWz8I5X3ypcu).'); return; }
+    var nm=(document.getElementById('coachName').value||'').trim();
+    var em=(document.getElementById('coachEmail').value||'').trim();
+    var ph=(document.getElementById('coachPhone').value||'').trim();
+    if(nm.indexOf(' ')===-1){ err('submitErr','Enter the coach/manager full name (first and last).'); return; }
+    if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)){ err('submitErr','Enter a valid email address.'); return; }
+    if(ph.replace(/\D/g,'').length<10){ err('submitErr','Enter a valid 10-digit cell phone number.'); return; }
     var btn=document.getElementById('submitBtn'); btn.disabled=true; btn.textContent='Submitting…';
     try{
       var r = await fetch(API_BASE+'/api/submit-gc',{
