@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Link Your GameChanger Team — USSSA</title>
+<style>
+  :root{ --navy:#0b1f3a; --navy2:#16294a; --red:#c8102e; --line:#e2e8f0; --muted:#64748b; --ok:#1a8f4c; }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:#f1f5f9;color:#0b1f3a}
+  .wrap{max-width:540px;margin:0 auto;padding:20px}
+  .card{background:#fff;border:1px solid var(--line);border-radius:14px;box-shadow:0 4px 18px rgba(15,23,42,.06);overflow:hidden}
+  .head{background:var(--navy);color:#fff;padding:22px 22px 18px}
+  .head h1{margin:0;font-size:20px;font-weight:800;letter-spacing:.2px}
+  .head p{margin:6px 0 0;font-size:13px;color:#c7d2e3}
+  .body{padding:22px}
+  label{display:block;font-size:13px;font-weight:700;margin:0 0 6px;color:#243b5e}
+  .hint{font-size:12px;color:var(--muted);margin:4px 0 0;line-height:1.4}
+  input{width:100%;padding:12px 14px;border:1px solid #cbd5e1;border-radius:9px;font-size:15px}
+  input:focus{outline:none;border-color:var(--navy);box-shadow:0 0 0 3px rgba(11,31,58,.12)}
+  .btn{display:inline-block;width:100%;background:var(--red);color:#fff;border:none;padding:13px 16px;border-radius:9px;font-size:15px;font-weight:800;cursor:pointer;margin-top:14px}
+  .btn:disabled{opacity:.6;cursor:default}
+  .btn.alt{background:var(--navy)}
+  .row{margin-top:16px}
+  .teamcard{margin-top:16px;border:1px solid var(--line);border-radius:11px;padding:14px 16px;background:#f8fafc}
+  .teamcard .nm{font-size:16px;font-weight:800}
+  .teamcard .sub{font-size:13px;color:var(--muted);margin-top:2px}
+  .badge{display:inline-block;background:#eaf0f8;border:1px solid var(--line);color:#243b5e;font-size:11px;font-weight:800;padding:2px 8px;border-radius:7px;margin-right:6px}
+  .msg{margin-top:14px;font-size:13px;padding:10px 12px;border-radius:9px;display:none}
+  .msg.err{display:block;background:#fdecec;color:#a01122;border:1px solid #f6c9cf}
+  .hidden{display:none}
+  .success{text-align:center;padding:30px 22px}
+  .success .ck{width:56px;height:56px;border-radius:50%;background:var(--ok);color:#fff;font-size:30px;line-height:56px;margin:0 auto 12px}
+  .success h2{margin:0 0 6px;font-size:20px}
+  .success p{color:var(--muted);font-size:14px;margin:0}
+  .foot{padding:14px 22px;border-top:1px solid var(--line);font-size:11px;color:var(--muted);text-align:center}
+  .optional{font-weight:500;color:var(--muted)}
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <div class="head">
+        <h1>Link Your GameChanger Team</h1>
+        <p>Connect your team's GameChanger so your stats publish for every USSSA event you play.</p>
+      </div>
+
+      <div class="body" id="step1">
+        <label for="teamId">USSSA Team ID</label>
+        <input id="teamId" type="text" inputmode="numeric" placeholder="e.g. 3323659" autocomplete="off">
+        <p class="hint">Find it on your USSSA team page — it's the number in the address bar after <b>teamID=</b> (e.g. <i>…/teamHome/?teamID=<b>3323659</b></i>).</p>
+        <button class="btn alt" id="findBtn" onclick="findTeam()">Find My Team</button>
+        <div class="msg err" id="findErr"></div>
+      </div>
+
+      <div class="body hidden" id="step2">
+        <div class="teamcard" id="teamCard"></div>
+        <div class="row">
+          <label for="gcUrl">Your GameChanger Team Link</label>
+          <input id="gcUrl" type="url" placeholder="https://web.gc.com/teams/XXXXXXXX" autocomplete="off">
+          <p class="hint">In the GameChanger app: <b>Team → Share → Copy Link</b>, then paste it here.</p>
+        </div>
+        <div class="row">
+          <label for="coachName">Manager / Coach Name <span class="optional">(optional)</span></label>
+          <input id="coachName" type="text" autocomplete="off">
+        </div>
+        <div class="row">
+          <label for="coachEmail">Email <span class="optional">(optional)</span></label>
+          <input id="coachEmail" type="email" autocomplete="off">
+        </div>
+        <div class="row">
+          <label for="coachPhone">Phone <span class="optional">(optional)</span></label>
+          <input id="coachPhone" type="tel" autocomplete="off">
+        </div>
+        <button class="btn" id="submitBtn" onclick="submitGc()">Submit GameChanger Link</button>
+        <div class="msg err" id="submitErr"></div>
+        <button class="btn alt" style="background:#64748b;margin-top:10px" onclick="resetForm()">← Use a different Team ID</button>
+      </div>
+
+      <div class="success hidden" id="done">
+        <div class="ck">✓</div>
+        <h2>You're all set!</h2>
+        <p id="doneMsg"></p>
+        <button class="btn" style="margin-top:18px" onclick="resetForm()">Link another team</button>
+      </div>
+
+      <div class="foot">USSSA Event Central • Stats powered by GameChanger</div>
+    </div>
+  </div>
+
+<script>
+  // This branded page is served from directorassistant.com; the API lives on the Render backend.
+  var API_BASE = 'https://unrivaled-connect-backend.onrender.com';
+  var currentTeam = null;
+  function show(id){ document.getElementById(id).classList.remove('hidden'); }
+  function hide(id){ document.getElementById(id).classList.add('hidden'); }
+  function err(id,msg){ var e=document.getElementById(id); if(!msg){e.style.display='none';return;} e.textContent=msg; e.style.display='block'; }
+
+  async function findTeam(){
+    var id = (document.getElementById('teamId').value||'').replace(/\D/g,'');
+    err('findErr','');
+    if(!id){ err('findErr','Enter your USSSA Team ID.'); return; }
+    var btn=document.getElementById('findBtn'); btn.disabled=true; btn.textContent='Looking up…';
+    try{
+      var r = await fetch(API_BASE+'/api/usssa-team/'+id);
+      var data = await r.json();
+      if(!r.ok) throw new Error(data.error||'Team not found');
+      currentTeam = data;
+      var cls = data.classRaw || data.ageClass || '';
+      document.getElementById('teamCard').innerHTML =
+        '<div class="nm">'+escapeHtml(data.teamName)+'</div>' +
+        '<div class="sub">' + (cls?('<span class="badge">'+escapeHtml(cls)+'</span>'):'') +
+          escapeHtml([data.city, data.state].filter(Boolean).join(', ')) + '</div>';
+      hide('step1'); show('step2');
+    }catch(e){ err('findErr', e.message); }
+    finally{ btn.disabled=false; btn.textContent='Find My Team'; }
+  }
+
+  async function submitGc(){
+    err('submitErr','');
+    var gc = (document.getElementById('gcUrl').value||'').trim();
+    if(!/gc\.com\/teams\/[A-Za-z0-9_-]+/i.test(gc)){ err('submitErr','Paste a valid GameChanger team link (web.gc.com/teams/…).'); return; }
+    var btn=document.getElementById('submitBtn'); btn.disabled=true; btn.textContent='Submitting…';
+    try{
+      var r = await fetch(API_BASE+'/api/submit-gc',{
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({
+          usssaTeamId: currentTeam.usssaTeamId,
+          gcUrl: gc,
+          coachName: document.getElementById('coachName').value.trim(),
+          coachEmail: document.getElementById('coachEmail').value.trim(),
+          coachPhone: document.getElementById('coachPhone').value.trim()
+        })
+      });
+      var data = await r.json();
+      if(!r.ok) throw new Error(data.error||'Something went wrong');
+      document.getElementById('doneMsg').textContent =
+        (currentTeam.teamName||'Your team') + "'s GameChanger is linked. Your stats will now publish across your USSSA events.";
+      hide('step2'); show('done');
+    }catch(e){ err('submitErr', e.message); }
+    finally{ btn.disabled=false; btn.textContent='Submit GameChanger Link'; }
+  }
+
+  function resetForm(){
+    currentTeam=null;
+    ['teamId','gcUrl','coachName','coachEmail','coachPhone'].forEach(function(id){ var el=document.getElementById(id); if(el) el.value=''; });
+    err('findErr',''); err('submitErr','');
+    hide('step2'); hide('done'); show('step1');
+  }
+  function escapeHtml(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
+
+  document.getElementById('teamId').addEventListener('keydown',function(e){ if(e.key==='Enter') findTeam(); });
+  document.getElementById('gcUrl').addEventListener('keydown',function(e){ if(e.key==='Enter') submitGc(); });
+</script>
+</body>
+</html>
