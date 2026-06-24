@@ -2243,7 +2243,19 @@
                 <option value="past">Past</option>
                 <option value="setup">Setup</option>
               </select>
+              <select id="ecSortFilter" onchange="loadECEvents()" style="padding:6px 12px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--navy-light); font-size:13px; color:var(--text-primary);">
+                <option value="date_desc">Sort: Date (newest)</option>
+                <option value="date_asc">Sort: Date (oldest)</option>
+                <option value="name">Sort: Name (A–Z)</option>
+                <option value="state">Sort: State (A–Z)</option>
+                <option value="teams">Sort: Most teams</option>
+                <option value="missing_gc">Sort: Most missing GC</option>
+              </select>
             </div>
+          </div>
+          <div style="display:flex; justify-content:flex-end; gap:8px; padding:8px 4px;">
+            <button onclick="ecSetAllStates(true)" style="padding:4px 10px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--navy-light); font-size:12px; color:var(--text-secondary); cursor:pointer;">Expand all</button>
+            <button onclick="ecSetAllStates(false)" style="padding:4px 10px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--navy-light); font-size:12px; color:var(--text-secondary); cursor:pointer;">Collapse all</button>
           </div>
           <div id="ecEventsList" style="min-height:100px;"></div>
         </div>
@@ -7642,7 +7654,20 @@ async function saveBcastTemplate() {
         if (et.team && et.team.gc_team_id) teamCountsByEvent[et.event_id].linked++;
       });
 
-      container.innerHTML = events.map(e => {
+      // ── Sort (client-side) per the Sort dropdown ──
+      const sortF = document.getElementById('ecSortFilter')?.value || 'date_desc';
+      const cntOf = (e) => teamCountsByEvent[e.id] || { total: 0, linked: 0 };
+      const cmpMap = {
+        date_desc:  (a, b) => String(b.start_date || '').localeCompare(String(a.start_date || '')),
+        date_asc:   (a, b) => String(a.start_date || '').localeCompare(String(b.start_date || '')),
+        name:       (a, b) => String(a.name || a.event_name || '').localeCompare(String(b.name || b.event_name || '')),
+        state:      (a, b) => (eventState(a) || 'ZZ').localeCompare(eventState(b) || 'ZZ') || String(b.start_date || '').localeCompare(String(a.start_date || '')),
+        teams:      (a, b) => cntOf(b).total - cntOf(a).total,
+        missing_gc: (a, b) => (cntOf(b).total - cntOf(b).linked) - (cntOf(a).total - cntOf(a).linked),
+      };
+      events = events.slice().sort(cmpMap[sortF] || cmpMap.date_desc);
+
+      const renderEventCard = (e) => {
         const statusColors = {
           setup: 'var(--warning)',
           active: 'var(--success)',
@@ -7654,10 +7679,12 @@ async function saveBcastTemplate() {
         const counts = teamCountsByEvent[e.id] || { total: 0, linked: 0 };
         const missing = counts.total - counts.linked;
         const allLinked = counts.total > 0 && missing === 0;
+        const st = eventState(e);
+        const stateBadge = st ? '<span style="display:inline-block; background:var(--navy-light); border:1px solid var(--border); color:var(--text-secondary); font-size:10px; font-weight:700; letter-spacing:0.5px; padding:1px 6px; border-radius:6px; margin-right:8px; vertical-align:middle;">' + st + '</span>' : '';
 
         return '<div style="padding:16px 20px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; cursor:pointer;" onclick="showEventDetail(\'' + e.id + '\')">' +
           '<div style="flex:1; min-width:200px;">' +
-            '<div style="font-size:15px; font-weight:600;">' + (e.name || e.event_name || 'Untitled') + '</div>' +
+            '<div style="font-size:15px; font-weight:600;">' + stateBadge + (e.name || e.event_name || 'Untitled') + '</div>' +
             '<div style="font-size:12px; color:var(--text-muted); margin-top:2px;">' +
               (e.start_date || '') + ' to ' + (e.end_date || '') +
               (e.venue ? ' • ' + e.venue : '') +
@@ -7682,7 +7709,66 @@ async function saveBcastTemplate() {
             '<button onclick="event.stopPropagation(); deleteEventConfirm(\'' + e.id + '\')" style="background:none; border:1px solid var(--border); border-radius:var(--radius-sm); padding:4px 8px; cursor:pointer; color:var(--text-muted); font-size:12px;" title="Delete event">🗑</button>' +
           '</div>' +
         '</div>';
-      }).join('');
+      };
+
+      // ── Always group into collapsible state sections (accordion) ──
+      // Keeps the list short at national scale; the chosen Sort orders events WITHIN each state.
+      window.ecStateOpen = window.ecStateOpen || {};
+      const groups = {};
+      events.forEach(e => { const k = eventState(e) || '—'; (groups[k] = groups[k] || []).push(e); });
+      // State sections alphabetical; "no state" last.
+      const stateKeys = Object.keys(groups).sort((a, b) => ((a === '—') - (b === '—')) || a.localeCompare(b));
+      window.ecRenderedStates = stateKeys.map(s => (s === '—' ? 'NONE' : s));
+
+      let html = '';
+      stateKeys.forEach(stateLabel => {
+        const list = groups[stateLabel];
+        const key = (stateLabel === '—' ? 'NONE' : stateLabel);
+        let gTeams = 0, gMissing = 0;
+        list.forEach(e => { const c = teamCountsByEvent[e.id] || { total: 0, linked: 0 }; gTeams += c.total; gMissing += (c.total - c.linked); });
+        // Default open if any event is active or not yet finished; otherwise collapsed.
+        const defaultOpen = list.some(e => e.status === 'active' || (e.end_date || '') >= today);
+        const isOpen = (key in window.ecStateOpen) ? window.ecStateOpen[key] : defaultOpen;
+        window.ecStateOpen[key] = isOpen;
+        const label = (stateLabel === '—' ? 'NO STATE DETECTED' : stateLabel);
+        html += '<div>' +
+          '<div onclick="toggleStateGroup(\'' + key + '\')" style="padding:10px 20px; background:var(--navy-light); border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; cursor:pointer; user-select:none;">' +
+            '<div style="font-size:13px; font-weight:700; letter-spacing:0.5px; color:var(--text-secondary);">' +
+              '<span id="ecChev-' + key + '" style="display:inline-block; width:14px;">' + (isOpen ? '▾' : '▸') + '</span> ' + label +
+              ' <span style="font-weight:500; color:var(--text-muted);">• ' + list.length + ' event' + (list.length !== 1 ? 's' : '') + '</span>' +
+            '</div>' +
+            '<div style="font-size:11px; color:var(--text-muted);">' + gTeams + ' teams' + (gMissing > 0 ? ' • <span style="color:var(--danger);">' + gMissing + ' missing GC</span>' : '') + '</div>' +
+          '</div>' +
+          '<div id="ecState-' + key + '" style="display:' + (isOpen ? 'block' : 'none') + ';">' +
+            list.map(renderEventCard).join('') +
+          '</div>' +
+        '</div>';
+      });
+      container.innerHTML = html;
+    }
+
+    // Toggle one state section; remembers the choice for this session across re-renders.
+    function toggleStateGroup(key) {
+      var body = document.getElementById('ecState-' + key);
+      var chev = document.getElementById('ecChev-' + key);
+      if (!body) return;
+      var open = body.style.display !== 'none';
+      body.style.display = open ? 'none' : 'block';
+      if (chev) chev.textContent = open ? '▸' : '▾';
+      window.ecStateOpen = window.ecStateOpen || {};
+      window.ecStateOpen[key] = !open;
+    }
+
+    // Expand/collapse every rendered state section.
+    function ecSetAllStates(open) {
+      window.ecStateOpen = window.ecStateOpen || {};
+      (window.ecRenderedStates || []).forEach(function(key) {
+        var body = document.getElementById('ecState-' + key);
+        var chev = document.getElementById('ecChev-' + key);
+        if (body) body.style.display = open ? 'block' : 'none';
+        if (chev) chev.textContent = open ? '▾' : '▸';
+        window.ecStateOpen[key] = open;
+      });
     }
     
     function showCreateEventModal(editId) {
