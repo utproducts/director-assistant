@@ -56,9 +56,9 @@
       <div class="body hidden" id="step2">
         <div class="teamcard" id="teamCard"></div>
         <div class="row">
-          <label for="gcUrl">Your GameChanger Team Link</label>
-          <input id="gcUrl" type="url" placeholder="https://web.gc.com/teams/XXXXXXXX" autocomplete="off">
-          <p class="hint">In the GameChanger app: <b>Team → Share → Copy Link</b>, then paste it here.</p>
+          <label for="gcUrl">Your GameChanger Team Link or Team ID</label>
+          <input id="gcUrl" type="text" placeholder="web.gc.com/teams/… or Team ID (e.g. UWz8I5X3ypcu)" autocomplete="off">
+          <p class="hint">Easiest: on your GameChanger team page tap the <b>⋮</b> menu and copy the <b>Team ID</b>. Or paste the full team link.</p>
         </div>
         <div class="row">
           <label for="coachName">Manager / Coach Name <span class="optional">(optional)</span></label>
@@ -119,7 +119,8 @@
   async function submitGc(){
     err('submitErr','');
     var gc = (document.getElementById('gcUrl').value||'').trim();
-    if(!/gc\.com\/teams\/[A-Za-z0-9_-]+/i.test(gc)){ err('submitErr','Paste a valid GameChanger team link (web.gc.com/teams/…).'); return; }
+    var okGc = /gc\.com\/teams\/[A-Za-z0-9_-]+/i.test(gc) || /^[A-Za-z0-9_-]{6,}$/.test(gc);
+    if(!okGc){ err('submitErr','Enter your GameChanger team link or Team ID (e.g. UWz8I5X3ypcu).'); return; }
     var btn=document.getElementById('submitBtn'); btn.disabled=true; btn.textContent='Submitting…';
     try{
       var r = await fetch(API_BASE+'/api/submit-gc',{
